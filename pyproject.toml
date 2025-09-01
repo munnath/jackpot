@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jackpot"
+version = "0.1.0"
+description = "Jackpot tool (cf. article https://hal.science/IMT/hal-04744486v1)"
+authors = [
+  { name="Nathanaël Munier", email="nathanael.munier@ens-rennes.fr" }
+]
+readme = "README.md"
+dependencies = [
+  "numpy",
+  "scipy",
+  "torch",
+]
+
+[project.urls]
+Homepage = "https://gitlab.irit.fr/mambo/nathanael_munier/jackpot"

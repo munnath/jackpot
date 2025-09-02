@@ -1,20 +1,35 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "jackpot"
 version = "0.1.0"
-description = "Jackpot tool (cf. article https://hal.science/IMT/hal-04744486v1)"
+description = "Adversarial manifold & singular solver tooling for Jackpot experiments"
+readme = "README.md"
 authors = [
   { name="Nathanaël Munier", email="nathanael.munier@ens-rennes.fr" }
 ]
-readme = "README.md"
+requires-python = ">=3.10"
 dependencies = [
-  "numpy",
-  "scipy",
-  "torch",
+    "torch>=2.2",
+    "tqdm>=4.64",
+    "matplotlib>=3.7",
+    "numpy>=1.24"
 ]
+
+[tool.setuptools]
+packages = ["jackpot"]
+
+[project.optional-dependencies]
+dev = ["pytest", "mypy", "ruff"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
 
 [project.urls]
 Homepage = "https://gitlab.irit.fr/mambo/nathanael_munier/jackpot"

@@ -16,7 +16,7 @@ WARNING : EVERY OPERATOR INCLUDED IN THIS FRAMEWORK WILL BE CONSIDERED AS MATRIX
 
 
 
-class StopCriteria(nn.Module):
+class AdditionalCriteria(nn.Module):
     def __init__(self, input_shape, stop=True):
         """
         Class to set some stopping criteria defining the adversarial manifold.

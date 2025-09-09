@@ -16,10 +16,10 @@ from tqdm import tqdm
 import os
 from pathlib import Path
 
-from tangent_grid import Grid
-from additional_stop_criteria import AdditionalCriteria
-from direct_model import ModelOperator
-from utils import send_to_cpu
+from .tangent_grid import Grid
+from .stop_criteria import AdditionalCriteria
+from .direct_model import ModelOperator
+from .utils import send_to_cpu
 
 """
 WARNING : EVERY OPERATOR INCLUDED IN THIS FRAMEWORK WILL BE CONSIDERED AS MATRIX

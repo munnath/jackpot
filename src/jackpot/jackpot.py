@@ -5,8 +5,8 @@ from pathlib import Path
 import time
 
 from .adversarial import AdversarialManifold
-from .model_operator import ModelOperator
-from .stop_criteria import StopCriteria
+from .direct_model import ModelOperator
+from .stop_criteria import AdditionalCriteria
 
 
 """
@@ -338,7 +338,7 @@ class Jackpot(nn.Module):
             number of discretized points of the manifold per dimension.
         lengths : float or tuple or list, optional
             lengths of the manifold in each directions. The default is None.
-        add_criteria : StopCriteria or None, optional
+        add_criteria : AdditionalCriteria or None, optional
             Additive criteria if needed. The default is None.
         directions : tensor of shape (N, n_dim), optional
             Per default, already computed singular vectors are used. 
@@ -373,8 +373,8 @@ class Jackpot(nn.Module):
 
         
         ## Criteria defining the adversarial manifold ##
-        criteria = StopCriteria(self.x_est.shape)
-        if isinstance(add_criteria, StopCriteria) and add_criteria != None:
+        criteria = AdditionalCriteria(self.x_est.shape)
+        if isinstance(add_criteria, AdditionalCriteria) and add_criteria != None:
             criteria = add_criteria
         
         ## Optimization parameters for parameterization ##

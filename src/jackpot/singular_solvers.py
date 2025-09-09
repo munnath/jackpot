@@ -14,8 +14,8 @@ from time import time
 import matplotlib.pyplot as plt
 
 
-from utils import tensor_empty_cache, FlatForward
-from torch_lobpcg import lobpcg
+from .utils import tensor_empty_cache, FlatForward
+from .torch_lobpcg import lobpcg
 
 """
 WARNING : EVERY OPERATOR INCLUDED IN THIS FRMAWORK WILL BE CONSIDERED AS MATRIX

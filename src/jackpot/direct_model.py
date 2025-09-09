@@ -12,8 +12,8 @@ import torch.nn as nn
 from pathlib import Path
 
 from tqdm import tqdm
-from singular_solvers import SingularSolver, singular_vectors
-from utils import FlatForward, tensor_empty_cache
+from .singular_solvers import SingularSolver, singular_vectors
+from .utils import FlatForward, tensor_empty_cache
 
 """
 WARNING : EVERY OPERATOR INCLUDED IN THIS FRAMEWORK WILL BE CONSIDERED AS MATRIX

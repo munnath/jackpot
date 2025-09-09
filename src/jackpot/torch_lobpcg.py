@@ -3,6 +3,7 @@
 
 """Locally Optimal Block Preconditioned Conjugate Gradient methods."""
 
+# https://gitlab.maisondelasimulation.fr/agueroud/pytorch/-/blob/1.6_doc_references/torch/_lobpcg.py
 # Author: nmunier
 # Inspired from: Pearu Peterson
 # Created: March 2024

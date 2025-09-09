@@ -549,7 +549,7 @@ class Jackpot(nn.Module):
         if not(Path(filename).is_file()):
             print(f"There is no such file: {filename}.")
         else:
-            self.adv_mani, self.grid = self._load_adv_mani_and_grid(self.Phi, filename)
+            self.adv_mani, self.grid = self._load_adv_mani_and_grid(filename)
             print(f"{filename} loaded.")
     
     def adv_manifold_save(self, filename = None, filename_suffix = ""):

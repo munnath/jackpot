@@ -13,4 +13,4 @@ __all__ = [
     "singular_vectors",
 ]
 
-__version__ = 0.1.2
+__version__ = "0.1.2"

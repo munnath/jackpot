@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
 from pathlib import Path
-import time
+from time import time
 
 from .adversarial import AdversarialManifold
 from .direct_model import ModelOperator

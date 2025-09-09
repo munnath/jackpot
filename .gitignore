@@ -20,3 +20,7 @@ build/
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+
+# Saves from tutorial
+.notebooks/saves
+

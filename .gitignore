@@ -22,5 +22,5 @@ htmlcov/
 .mypy_cache/
 
 # Saves from tutorial
-.notebooks/saves
+.notebooks/saves/*
 

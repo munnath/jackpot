@@ -1,15 +1,15 @@
 from .jackpot import Jackpot
-from .manifold import AdversarialManifold
-from .direct_model import ModelOperator
-from .additional_criteria import AdditionalCriteria
+from .manifold import Manifold
+from .direct_model import Model
+from .additional_criteria import Criteria
 from .singular_solvers import SingularSolver
 
 __all__ = [
     "Jackpot",
-    "AdversarialManifold",
-    "ModelOperator",
-    "AdditionalCriteria",
+    "Manifold",
+    "Operator",
+    "Criteria",
     "SingularSolver",
 ]
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"

@@ -15,10 +15,10 @@ WARNING : EVERY OPERATOR INCLUDED IN THIS FRAMEWORK WILL BE CONSIDERED AS MATRIX
 
 
 
-class AdditionalCriteria(nn.Module):
+class Criteria(nn.Module):
     def __init__(self, input_shape, stop=True):
         """
-        Class to set some stopping criteria defining the adversarial manifold.
+        Class to set some additive criteria defining the adversarial manifold.
 
         The main functionnalities are:
             - Add a criterion (add_discrepancy_criterion, add_criterion)

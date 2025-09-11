@@ -22,7 +22,7 @@ WARNING : EVERY OPERATOR INCLUDED IN THIS FRAMEWORK WILL BE CONSIDERED AS MATRIX
 
 
 
-class ModelOperator(nn.Module):
+class Model(nn.Module):
     def __init__(self, Phi, x_example, parallel=False):
         """
         Create a model whose direct operator is defined by the function Phi.
@@ -80,6 +80,7 @@ class ModelOperator(nn.Module):
         self._vjp_x0, self._jvp_x0 = None, None
     
     def partial_svd(self, x0, ):
+        pass
     	
     
     def find_singular_pairs(self, x0=None, compute=True, save_result=False,
@@ -91,8 +92,8 @@ class ModelOperator(nn.Module):
         assert ((from_svd and method in ["svd", "svd_ATA"]
                 ) or (not (from_svd) and method in ["lobpcg", "jacobi", "lbfgs"]))
         
-        if not(isinstance(self.Phi, ModelOperator)):
-            self.Phi = ModelOperator(self.Phi, x0)
+        if not(isinstance(self.Phi, Model)):
+            self.Phi = Model(self.Phi, x0)
 
         # If not already computed and there is no file -> I force the computation and save
         if not(Path(save_load_filename).is_file()) and not(compute):

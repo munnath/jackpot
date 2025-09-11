@@ -386,7 +386,7 @@ class Jackpot(nn.Module):
             number of discretized points of the manifold per dimension.
         lengths : float or tuple or list, optional
             lengths of the manifold in each directions. The default is None.
-        add_criteria : AdditionalCriteria or None, optional
+        add_criteria : Criteria or None, optional
             Additive criteria if needed. The default is None.
         directions : tensor of shape (N, n_dim), optional
             Per default, already computed singular vectors are used. 
@@ -510,7 +510,7 @@ class Jackpot(nn.Module):
         x0 = dict_load["x0"].to(device=device, dtype=dtype)
 
         # Set the direct model and the adv_mani tool
-        model = ModelOperator(self.Phi, x0)
+        model = Model(self.Phi, x0)
         adv_mani = Manifold(model, device=device, dtype=dtype)
 
         # Set the grid

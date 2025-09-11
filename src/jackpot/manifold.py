@@ -15,9 +15,9 @@ from tqdm import tqdm
 import os
 from pathlib import Path
 
-from .tangent_grid import Grid
-from .stop_criteria import AdditionalCriteria
-from .direct_model import ModelOperator
+from .grid import Grid
+from .additional_criteria import Criteria
+from .direct_model import Model
 from .utils import send_to_cpu
 
 """
@@ -27,14 +27,14 @@ WARNING : EVERY OPERATOR INCLUDED IN THIS FRAMEWORK WILL BE CONSIDERED AS MATRIX
 
 
 
-class AdversarialManifold(nn.Module):
+class Manifold(nn.Module):
     def __init__(self, model, device="cuda", dtype=torch.float32):
         """
-        Define a adv_mani parameterization tool
+        Define a manifold parameterization tool
 
         Parameters
         ----------
-        model : ModelOperator
+        model : Model
             Direct model.
         device : device, optional
             The default is "cuda".
@@ -60,7 +60,7 @@ class AdversarialManifold(nn.Module):
         self.device = device
         self.dtype = dtype
         input_shape, _ = model._get_shapes()
-        self.criterion = AdditionalCriteria(input_shape)
+        self.criterion = Criteria(input_shape)
         self.parallel = model.parallel
 
     def save_results(self, save_params_filename, grid, expe_name=""):
@@ -156,7 +156,7 @@ class AdversarialManifold(nn.Module):
 
         # Some checks
         assert isinstance(grid, Grid)
-        assert isinstance(criteria, AdditionalCriteria)
+        assert isinstance(criteria, Criteria)
         assert isinstance(optim_params, dict)
         assert search_method == "bfs"
         assert (optim_params["subdivs"]) >= 1
@@ -691,10 +691,10 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
             if output_operator == None:
                 out_op = self.Phi
             else:
-                if isinstance(output_operator, ModelOperator):
+                if isinstance(output_operator, Model):
                     out_op = output_operator
                 else:
-                    out_op = ModelOperator(output_operator, self.x0)
+                    out_op = Model(output_operator, self.x0)
 
             x_init = x0.clone().detach()
             x0_norm = x_init.norm()

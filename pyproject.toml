@@ -10,9 +10,9 @@ readme = "README.md"
 authors = [
   { name="Nathanaël Munier", email="nathanael.munier@ens-rennes.fr" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 dependencies = [
-    "torch>=2.2",
+    "torch>=2.0",
     "tqdm>=4.64",
     "matplotlib>=3.7",
     "numpy>=1.24"

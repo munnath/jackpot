@@ -1,13 +1,20 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Mar  2 14:20:24 2023
+
+@author: Nathanaël Munier 
+"""
+
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
 from pathlib import Path
 from time import time
 
-from .adversarial import AdversarialManifold
-from .direct_model import ModelOperator
-from .stop_criteria import AdditionalCriteria
-
+from .manifold import Manifold
+from .direct_model import Model
+from .additional_criteria import Criteria
+from .grid import Grid
 
 """
 WARNING : EVERY OPERATOR INCLUDED IN THIS FRAMEWORK WILL BE CONSIDERED AS MATRIX
@@ -55,31 +62,24 @@ class Jackpot(nn.Module):
         
         # EXPERIMENT NAME AND FILENAMES
         self.set_expe_name(expe_name, save_rootname)
-        
-        # LOAD AND SAVE
-        self.sing_load = False
-        self.sing_save = not(self.sing_load)
-        self.adv_mani_load = False
-        self.adv_mani_save = not(self.adv_mani_load)
-        self.save_plots = True
 
         # JACOBIAN SINGULAR SPECTRUM VARIABLES
-        self.n_sing = None
-        self.sing_max_time = None
+        self.n_singular_pairs = 5
+        self.max_compute_time = 3600
         
-        # ADVERSARIAL MANIFOLD COMPUTATION VARIABLES
-        self.n_dim = None
-        self.epsilon = None
-        self.n_discr_pts = None
-        self.grid_lengths = None
+        # MANIFOLD COMPUTATION VARIABLES
+        self.D = 2
+        self.epsilon = 1e-1
+        self.n_points_per_axis = 11
+        self.grid_length = 1e-2
 
         if Phi != None and x_est != None:
             self.Phi = Phi
             self.x_est = x_est
             
-            # Set the direct model and the Adversarial Manifold
-            self.model = ModelOperator(self.Phi, self.x_est, parallel = parallel)
-            self.adv_mani = AdversarialManifold(self.model, **self.factory_kwargs)
+            # Set the direct model and the Manifold
+            self.model = Model(self.Phi, self.x_est, parallel = parallel)
+            self.manifold = Manifold(self.model, **self.factory_kwargs)
 
             self.grid = None
             self.sing_vals = None
@@ -103,29 +103,6 @@ class Jackpot(nn.Module):
         self.fname_adv_mani_plot = self.save_rootname / Path(
             f"{self.expe_name}_discrepancies.png")
 
-
-    def __str__(self):
-        # lines = ["LOPBCG:"]
-        # lines += [f"  iparams={self.iparams}"]
-        # lines += [f"  fparams={self.fparams}"]
-        # lines += [f"  bparams={self.bparams}"]
-        # lines += [f"  ivars={self.ivars}"]
-        # lines += [f"  fvars={self.fvars}"]
-        # lines += [f"  bvars={self.bvars}"]
-        # lines += [f"  tvars={self.tvars}"]
-        # lines += [f"  apply_A={self.apply_A}"]
-        # lines += [f"  apply_sub_A={self.apply_sub_A}"]
-        # lines += [f"  B={self.B}"]
-        # lines += [f"  iK={self.iK}"]
-        # lines += [f"  X={self.X}"]
-        # lines += [f"  E={self.E}"]
-        # r = ""
-        # for line in lines:
-        #     r += line + "\n"
-        # return r
-        pass
-
-
     def get_model_dimensions(self):
         return {"input_dim": self.model.N, "output_dim": self.model.M}
     
@@ -136,9 +113,9 @@ class Jackpot(nn.Module):
         return self.grid
         
     def get_manifold(self):
-        return self.adv_mani
+        return self.manifold
     
-    def jac_spectrum_compute(self, n_sing = None, method = None, sing_max_time = None):
+    def jac_spectrum_compute(self, n_singular_pairs = None, method = None, max_compute_time = None):
         """
         Computing the lowest Jacobian singular pairs (sigma_i, v_i) 
             - sigma_i are the singular values
@@ -146,8 +123,8 @@ class Jackpot(nn.Module):
 
         Parameters
         ----------
-        n_vals : int
-            Number of singularpairs to compute.
+        n_singular_pairs : int
+            Number of singular pairs to compute.
         method : str or None, optional
             Computational method to get singularpairs. 
             Either "svd" or "svd_ATA" or "lobpcg"
@@ -164,14 +141,14 @@ class Jackpot(nn.Module):
         """
         
         # Check that all required input values are given
-        assert n_sing != None or self.n_sing != None, "The number of singular pairs to compute  is required! Please give a value to Jackpot.n_sing."
-        assert sing_max_time != None or self.sing_max_time != None, "The maximal time (in second) to compute singular paris is required! Please give a value to Jackpot.sing_max_time."
+        assert n_singular_pairs != None or self.n_singular_pairs != None, "The number of singular pairs to compute is required! Please give a value to Jackpot.n_singular_pairs."
+        assert max_compute_time != None or self.max_compute_time != None, "The maximal time (in second) to compute singular paris is required! Please give a value to Jackpot.max_compute_time."
 
-        if n_sing == None:
-            n_sing = self.n_sing
+        if n_singular_pairs == None:
+            n_singular_pairs = self.n_singular_pairs
 
-        if sing_max_time == None:
-            sing_max_time = self.sing_max_time
+        if max_compute_time == None:
+            max_compute_time = self.max_compute_time
         
         # Main computation
         if method == None:
@@ -187,27 +164,98 @@ class Jackpot(nn.Module):
         
         t1 = time()
         
-        # self.sing_vals, self.sing_vects = self.Phi.find_singular_pairs(self.x_est,
-        #                                     compute=True,
-        #                                     save_result=False,
-        #                                     from_svd=(method in ["svd", "svd_ATA"]),
-        #                                     method=method,
-        #                                     n_sing_vals=n_sing,
-        #                                     save_load_filename="",
-        #                                     sing_steps=100000,
-        #                                     time_max=sing_max_time)
-        
-        self.sing_vals, self.sing_vects = self.adv_mani.find_singular_pairs(self.x_est,
-                                            compute=True,
+        self.sing_vals, self.sing_vects = self.find_singular_pairs(compute=True,
+                                            x0 = None,
                                             save_result=False,
                                             from_svd=(method in ["svd", "svd_ATA"]),
                                             method=method,
-                                            n_sing_vals=n_sing,
+                                            n_singular_pairs=n_singular_pairs,
                                             save_load_filename="",
-                                            sing_steps=100000,
-                                            time_max=sing_max_time)
+                                            max_compute_time=max_compute_time)
         
         self.jac_spec_timing = time() - t1
+    
+    
+    def find_singular_pairs(self, x0=None, compute=True, save_result=False,
+                            from_svd=True, method="svd_ATA",
+                            n_singular_pairs=2, save_load_filename=None,
+                            sing_thres=0.,
+                            precond_fn="Id", max_compute_time=1e10,
+                            verbose=False):
+
+        assert ((from_svd and method in ["svd", "svd_ATA"]
+                ) or (not (from_svd) and method in ["lobpcg", "jacobi", "lbfgs"]))
+        
+        # If not already computed and there is no file -> I force the computation and save
+        if not(Path(save_load_filename).is_file()) and not(compute):
+            print("The singular pairs are not already computed.")
+            print(save_load_filename, "is not a file!")
+            print("Computation of the singular pairs...")
+            compute = True
+            save_result = True
+        
+        # COMPUTE SINGULAR VECTORS #
+        if compute:
+            assert x0 != None
+
+            if from_svd:
+                # COMPUTE THE WHOLE JACOBIAN SINCE IT IS OF SMALL DIMENSION #
+                self.Phi.jacobian_compute(x0)
+                sing_vals, sing_vects = self.Phi.svd_extract_singular_vectors(n_sing_vals,
+                                                                              largest=False, 
+                                                                              method=method)
+            else:
+                if self.dtype == torch.float32:
+                    self.tolerance = 1e-12 * 2
+                elif self.dtype == torch.float64:
+                    self.tolerance = 1e-24 * 2
+                sing_vects, sing_vals, _, _, _ = self.Phi.singular_pairs_solve(x0,
+                                                                               k=n_sing_vals, 
+                                                                               X_init=None,
+                                                                               tol=self.tolerance,
+                                                                               method=method, 
+                                                                               time_max=time_max,
+                                                                               verbose=verbose)
+            
+            sing_vals = torch.abs(sing_vals)**0.5
+            if save_result:
+                self.save_singular_pairs(save_load_filename, sing_vals, sing_vects)
+        else:
+            sing_vals, sing_vects = self.load_singular_pairs(save_load_filename)
+
+        ### RESHAPE SINGULAR VECTORS ###
+        if sing_vects.ndim == 1:
+            sing_vects = sing_vects[:, None]
+        assert sing_vects.ndim == 2
+
+        return sing_vals, sing_vects
+    
+    def save_singular_pairs(self, filename, sing_vals, sing_vects):
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        torch.save((sing_vals, sing_vects), filename)
+    
+    def load_singular_pairs(self, filename):
+        sing_vals, sing_vects = torch.load(filename)
+        sing_vals = sing_vals.to(device=self.device, dtype=self.dtype)
+        sing_vects = sing_vects.to(device=self.device, dtype=self.dtype)
+        return sing_vals, sing_vects
+    
+    def check_singular_vectors(self, x0, sing_vals, sing_vects):
+        
+        n_sing_vals = sing_vects.shape[-1]
+        
+        ### CHECK THE SINGULAR VECTORS ###
+        for k in range(n_sing_vals):
+            estims = []
+            for d in range(-20, -10):
+                delta = 2**d
+                jac_est = (self.Phi(x0 + delta * (sing_vects[:, k]).view(x0.shape))
+                            - self.Phi(x0)).norm().item() / delta
+                estims.append(jac_est)
+                # print(delta, jac_est)
+            print(
+                f"{k+1}^th sing val | autograd: {sing_vals[k].item():.4e} | finite difference: {min(estims):.4e}")
+    
     
     def _auto_jac_spec_savefile(self, n_vals, suffix = ""):
         if n_vals != None:
@@ -253,7 +301,7 @@ class Jackpot(nn.Module):
             _, filename = self._auto_jac_spec_savefile(n_sing, suffix = filename_suffix)
         
         
-        self.adv_mani.save_singular_pairs(filename, self.sing_vals, self.sing_vects)
+        self.save_singular_pairs(filename, self.sing_vals, self.sing_vects)
     
     def jac_spectrum_load(self, n_vals = None, filename = None, filename_suffix = ""):
         """
@@ -278,7 +326,7 @@ class Jackpot(nn.Module):
         if not(Path(filename).is_file()):
             print(f"There is no such file: {filename}.\n")
         else:
-            self.sing_vals, self.sing_vects = self.adv_mani.load_singular_pairs(filename)
+            self.sing_vals, self.sing_vects = self.load_singular_pairs(filename)
             n_sing_load = self.sing_vals.numel()
             
             if n_vals != None:
@@ -322,16 +370,16 @@ class Jackpot(nn.Module):
         else:
             print("There is no Jacobian singular spectrum to plot. \n Please compute or load it through jac_spectrum_compute or jac_spectrum_load functions.")
     
-    def adv_manifold_compute(self, n_dim = None, epsilon = None, n_discr_pts = None, grid_lengths = None,
+    def manifold_compute(self, n_dim = None, epsilon = None, n_discr_pts = None, grid_lengths = None,
                                     add_criteria = None, directions = None, 
                                     stop_criteria = False):
         """
-        Compute the adversarial manifold of the uncertainty region
+        Compute the jackpot manifold of the uncertainty region
 
         Parameters
         ----------
         n_dim : int
-            dimension of the adversarial manifold.
+            dimension of the manifold.
         eps : float
             discrepancy threshold.
         n_discr_pts : int or tuple or list
@@ -354,10 +402,10 @@ class Jackpot(nn.Module):
         """
         
         # Check that all required input values are given
-        assert n_dim != None or self.n_dim != None, "The dimension of the adversarial manifold is required! Please give a value to Jackpot.n_dim."
-        assert epsilon != None or self.epsilon != None, "The output discrepancy threshold of the adversarial manifold is required. Please give a value to Jackpot.n_dim."
-        assert n_discr_pts != None or self.n_discr_pts != None, "The number of points in each directions of the tangent grid of the adversarial manifold is required! Please give a value to Jackpot.n_discr_pts."
-        assert grid_lengths != None or self.grid_lengths != None, "The lenghts of the grid in each directions of the tangent grid of the adversarial manifold is required. Please give a value to Jackpot.grid_lengths."
+        assert n_dim != None or self.n_dim != None, "The dimension of the manifold is required! Please give a value to Jackpot.n_dim."
+        assert epsilon != None or self.epsilon != None, "The output discrepancy threshold of the manifold is required. Please give a value to Jackpot.n_dim."
+        assert n_discr_pts != None or self.n_discr_pts != None, "The number of points in each directions of the tangent grid of the manifold is required! Please give a value to Jackpot.n_discr_pts."
+        assert grid_lengths != None or self.grid_lengths != None, "The lenghts of the grid in each directions of the tangent grid of the manifold is required. Please give a value to Jackpot.grid_lengths."
 
         if n_dim == None:
             n_dim = self.n_dim
@@ -372,9 +420,9 @@ class Jackpot(nn.Module):
             grid_lengths = self.grid_lengths
 
         
-        ## Criteria defining the adversarial manifold ##
-        criteria = AdditionalCriteria(self.x_est.shape)
-        if isinstance(add_criteria, AdditionalCriteria) and add_criteria != None:
+        ## Criteria defining the manifold ##
+        criteria = Criteria(self.x_est.shape)
+        if isinstance(add_criteria, Criteria) and add_criteria != None:
             criteria = add_criteria
         
         ## Optimization parameters for parameterization ##
@@ -386,7 +434,7 @@ class Jackpot(nn.Module):
         max_iter_per_step = 1000
         max_iter = 10
 
-        optim_params = self.adv_mani.optim_parameters(optim_method, max_iter,
+        optim_params = self.manifold.optim_parameters(optim_method, max_iter,
                                                  max_iter_per_step, history_size, 
                                                  line_search, lr, subdivs,
                                                  tol_change = 1e-5, tol_grad = 1e-5)
@@ -417,7 +465,7 @@ class Jackpot(nn.Module):
         
         # Compute the parameterization of the adversarial manifold and save the timing
         t1 = time()
-        self.adv_mani.compute_parameterization(self.x_est, grid=self.grid, 
+        self.manifold.compute_parameterization(self.x_est, grid=self.grid, 
                                                criteria=criteria,
                                                optim_params=optim_params,
                                                search_method="bfs")
@@ -450,7 +498,7 @@ class Jackpot(nn.Module):
 
         Returns
         -------
-        adv_mani : SolutionManifold
+        adv_mani : Manifold
             Solution tool with the direct model in it.
         grid : Grid
             discretized grid.
@@ -463,63 +511,13 @@ class Jackpot(nn.Module):
 
         # Set the direct model and the adv_mani tool
         model = ModelOperator(self.Phi, x0)
-        adv_mani = AdversarialManifold(model, device=device, dtype=dtype)
+        adv_mani = Manifold(model, device=device, dtype=dtype)
 
         # Set the grid
         grid = adv_mani.load_results(file_expe_name)
 
         return adv_mani, grid
     
-    # def set_adv_mani_and_grid(self, x0, sing_vects=None, grid_dim=1,
-    #                        dir_len=1e0, n_pts_per_dim=5, tol=None,
-    #                        parallel=False):
-    #     """
-    #     Define a direct model and a grid
-    #     If the singular vectors are not already computed (sing_vects = None), 
-    #     will only return a adv_mani tool with no grid
-
-    #     Parameters
-    #     ----------
-    #     Phi : function
-    #         direct model.
-    #     x0 : tensor of shape (N,)
-    #         input tensor.
-    #     sing_vects : tensor of shape (N, D), optional
-    #         set of singular vectors of the jacobian matrix at x0. The default is None.
-    #     grid_dim : int, optional
-    #         dimension of the grid. The default is 1.
-    #     dir_len : float, optional
-    #         length of the grid. The default is 1e0.
-    #     n_pts_per_dim : int of tuple of int of length D, optional
-    #         number of discretization points on each axis of the grid. The default is 5.
-
-    #     Returns
-    #     -------
-    #     adv_mani : SolutionManifold
-    #         Solution tool with the direct model in it.
-    #     grid : Grid
-    #         discretized grid.
-    #     """
-
-    #     device = x0.device
-    #     dtype = x0.dtype
-
-    #     # Set the direct model and the adv_mani tool
-    #     N = x0.numel()
-    #     model = ModelOperator(self.Phi, x0, parallel=parallel)
-    #     adv_mani = AdversarialManifold(model, device=device, dtype=dtype)
-
-    #     # Set the grid (None if no direction are given)
-    #     if sing_vects == None:
-    #         grid = None
-    #     else:
-    #         sing_vects = sing_vects.view((N, sing_vects.numel() // N))
-
-    #         grid_len = (dir_len,) * grid_dim
-    #         grid = adv_mani.set_grid_from_direction_list(direction_list=sing_vects,
-    #                                                      grid_len=grid_len,
-    #                                                      n_pts_per_dim=n_pts_per_dim)
-    #     return adv_mani, grid
     
     def adv_manifold_load(self, n_dim = None, filename = None, filename_suffix = ""):
         """

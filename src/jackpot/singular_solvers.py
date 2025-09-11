@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Apr 11 17:33:04 2024
+Created on Thu Mar  2 14:20:24 2023
 
-@author: munier
+@author: Nathanaël Munier 
 """
 
 import torch
@@ -25,7 +24,7 @@ WARNING : EVERY OPERATOR INCLUDED IN THIS FRMAWORK WILL BE CONSIDERED AS MATRIX
 
 def generate_rand_ortho_vects(N, n_vects, **factory_kwargs):
     """
-    Generate random n_vects orthogonal vectors of size N
+    Generates n_vects random orthogonal vectors of size N
 
     Parameters
     ----------
@@ -43,12 +42,9 @@ def generate_rand_ortho_vects(N, n_vects, **factory_kwargs):
 
     """
     assert N >= n_vects
-    X = torch.randn((N, n_vects,), **factory_kwargs)
-    X = X / torch.sum(X**2, axis=0)**0.5
-    X_ortho, _, _ = torch.linalg.svd(X, full_matrices=False)
-
+    X = torch.randn((N, n_vects), **factory_kwargs)
+    X_ortho, _ = torch.linalg.qr(X)  # Q has orthonormal columns
     del X
-
     return X_ortho
 
 

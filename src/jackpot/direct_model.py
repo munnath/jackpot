@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Thu Mar  2 14:20:24 2023
 
-@author: Pierre Weiss, Nathanael Munier 
+@author: Nathanaël Munier 
 """
 
 import torch
@@ -80,11 +79,13 @@ class ModelOperator(nn.Module):
         tensor_empty_cache(self._vjp_x0, self._jvp_x0)
         self._vjp_x0, self._jvp_x0 = None, None
     
+    def partial_svd(self, x0, ):
+    	
+    
     def find_singular_pairs(self, x0=None, compute=True, save_result=False,
                             from_svd=True, method="svd_ATA",
                             n_sing_vals=2, save_load_filename=None,
-                            sing_steps=1000, sing_thres=0.,
-                            precond_fn="Id", time_max=1e10,
+                            sing_thres=0., time_max=1e10,
                             verbose=False):
 
         assert ((from_svd and method in ["svd", "svd_ATA"]
@@ -294,7 +295,7 @@ class ModelOperator(nn.Module):
 
     def singular_pairs_solve(self, x0, k, X_init=None, method="lobpcg",
                              tol=1e-10, niter=100000, time_max=1e10,
-                             precond_fn="Id", verbose=False):
+                             verbose=False):
         """
         Compute the k right singular pairs of the jacobian J_Phi(x0) of the 
             direct model function Phi.
@@ -318,8 +319,6 @@ class ModelOperator(nn.Module):
             Number of iterations. The default is 100.
         time_max : float, optional
             Maximum time of computation. The default is 1e10.
-        precond_fn : matrix function or None or "Id"
-            Preconditioned operator. The default is "Id".
         verbose : bool, optional
             Verbose. The default is False.
 
@@ -343,9 +342,6 @@ class ModelOperator(nn.Module):
         if not (X_init is None):
             assert X_init.numel() == self.N * k
             X_init = X_init.view((self.N, k))
-
-        if precond_fn == "Id":
-            precond_fn = None
 
         x_fl = x0.ravel()
 

@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Mar  2 14:20:24 2023
+
+@author: Nathanaël Munier 
+"""
+
 import torch
 import numpy as np
 import matplotlib.pyplot as plt

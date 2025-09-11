@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Thu Mar  2 14:20:24 2023
 
-@author: Pierre Weiss, Nathanael Munier 
+@author: Nathanaël Munier 
 """
 
 import torch
@@ -56,8 +55,8 @@ class AdversarialManifold(nn.Module):
         self.param_losses = None
         self.param_is_computed = None
         self.param_optim_steps = None
-        self.param_criterion_vals = None
-        self.param_criterion_valid = None
+        self.param_critera_vals = None
+        self.param_critera_valid = None
         self.device = device
         self.dtype = dtype
         input_shape, _ = model._get_shapes()
@@ -117,7 +116,7 @@ class AdversarialManifold(nn.Module):
     def optim_parameters(self, method="L-BFGS", max_iter=10,
                          max_iter_per_step=200, history_size=10,
                          line_search="strong_wolfe", lr=1.,
-                         subdivs=1, tol_change = 0., tol_grad = 1e-5):
+                         subdivs=1, tol_change = 1e-5, tol_grad = 1e-5):
         optim_params = {}
 
         optim_params["method"] = method
@@ -131,93 +130,8 @@ class AdversarialManifold(nn.Module):
         optim_params["tol_grad"] = tol_grad
 
         return optim_params
-
-    def set_criteria(self):
-        input_shape, _ = self._get_shapes()
-        return AdditionalCriteria(input_shape)
     
-    def find_singular_pairs(self, x0=None, compute=True, save_result=False,
-                            from_svd=True, method="svd_ATA",
-                            n_sing_vals=2, save_load_filename=None,
-                            sing_steps=1000, sing_thres=0.,
-                            precond_fn="Id", time_max=1e10,
-                            verbose=False):
-
-        assert ((from_svd and method in ["svd", "svd_ATA"]
-                ) or (not (from_svd) and method in ["lobpcg", "jacobi", "lbfgs"]))
-        
-        if not(isinstance(self.Phi, ModelOperator)):
-            self.Phi = ModelOperator(self.Phi, x0)
-
-        # If not already computed and there is no file -> I force the computation and save
-        if not(Path(save_load_filename).is_file()) and not(compute):
-            print("The singular pairs are not already computed.")
-            print(save_load_filename, "is not a file!")
-            print("Computation of the singular pairs...")
-            compute = True
-            save_result = True
-        
-        # COMPUTE SINGULAR VECTORS #
-        if compute:
-            assert x0 != None
-
-            if from_svd:
-                # COMPUTE THE WHOLE JACOBIAN SINCE IT IS OF SMALL DIMENSION #
-                self.Phi.jacobian_compute(x0)
-                sing_vals, sing_vects = self.Phi.svd_extract_singular_vectors(n_sing_vals,
-                                                                              largest=False, 
-                                                                              method=method)
-            else:
-                if self.dtype == torch.float32:
-                    self.tolerance = 1e-12 * 2
-                elif self.dtype == torch.float64:
-                    self.tolerance = 1e-24 * 2
-                sing_vects, sing_vals, _, _, _ = self.Phi.singular_pairs_solve(x0,
-                                                                               k=n_sing_vals, 
-                                                                               X_init=None,
-                                                                               tol=self.tolerance,
-                                                                               method=method, 
-                                                                               time_max=time_max,
-                                                                               verbose=verbose)
-            
-            sing_vals = torch.abs(sing_vals)**0.5
-            if save_result:
-                self.save_singular_pairs(save_load_filename, sing_vals, sing_vects)
-        else:
-            sing_vals, sing_vects = self.load_singular_pairs(save_load_filename)
-
-        ### RESHAPE SING VECTS ###
-        if sing_vects.ndim == 1:
-            sing_vects = sing_vects[:, None]
-        assert sing_vects.ndim == 2
-
-        return sing_vals, sing_vects
     
-    def save_singular_pairs(self, filename, sing_vals, sing_vects):
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        torch.save((sing_vals, sing_vects), filename)
-    
-    def load_singular_pairs(self, filename):
-        sing_vals, sing_vects = torch.load(filename)
-        sing_vals = sing_vals.to(device=self.device, dtype=self.dtype)
-        sing_vects = sing_vects.to(device=self.device, dtype=self.dtype)
-        return sing_vals, sing_vects
-    
-    def check_singular_vectors(self, x0, sing_vals, sing_vects):
-        
-        n_sing_vals = sing_vects.shape[-1]
-        
-        ### CHECK THE SINGULAR VECTORS ###
-        for k in range(n_sing_vals):
-            estims = []
-            for d in range(-20, -10):
-                delta = 2**d
-                jac_est = (self.Phi(x0 + delta * (sing_vects[:, k]).view(x0.shape))
-                            - self.Phi(x0)).norm().item() / delta
-                estims.append(jac_est)
-                # print(delta, jac_est)
-            print(
-                f"{k+1}^th sing val | autograd: {sing_vals[k].item():.4e} | finite difference: {min(estims):.4e}")
 
     
     def compute_parameterization(self, x0, grid, criteria, optim_params,
@@ -1064,89 +978,3 @@ if __name__ == "__main__":
         [(x[::2, ...] - x[1::2, ...])**2, x[2::2, ...]], axis=0)
     x_est = torch.randn((N,), device=device, dtype=dtype)
 
-    # "
-    ## Solution set criteria ##
-    criteria = AdditionalCriteria(x_est.shape)
-
-    # # Criterion 1 (Input L2)
-    # criteria.add_discrepancy_criterion(threshold=1e10,
-    #                                    norm_type="L2",
-    #                                    discr_type="relative",
-    #                                    operator="Id")
-    # # Criterion 2 (Output L2)
-    # criteria.add_discrepancy_criterion(threshold=1e-3,
-    #                                    norm_type="L2",
-    #                                    discr_type="relative",
-    #                                    operator=Phi)
-
-    # # 
-    # ############# MAIN PART OF THE PARAMETERIZATION ###################
-    # adv_mani, grid = set_model_and_grid(Phi, x_est)
-
-    # ### SET THE OPTIMIZATION PARAMETERS ###
-    # optim_params = adv_mani.optim_parameters(optim_method, max_iter,
-    #                                          max_iter_per_step, history_size, 
-    #                                          line_search, lr, subdivs,
-    #                                          tol_change = 1e-5, tol_grad = 1e-5)
-
-    # ######  COMPUTE SINGULAR VECTORS ONCE FOR ALL  ######
-    # sing_filename = save_rootname / Path("sing_pairs_of_" + expe_name + "_"
-    #                                      + sing_method + ".pth")
-    # sing_vals, sing_vects = adv_mani.find_singular_pairs(x_est,
-    #                                                      compute=recompute_singpairs,
-    #                                                      save_result=save_singpairs,
-    #                                                      from_svd=compute_the_whole_jacobian,
-    #                                                      method=sing_method,
-    #                                                      n_sing_vals=n_sing_to_compute,
-    #                                                      save_load_filename=sing_filename,
-    #                                                      sing_steps=sing_steps,
-    #                                                      time_max=time_max_sing,
-    #                                                      verbose=verbose)
-
-    # ###### COMPUTE THE PARAMETERIZATION ON A 2D GRID #########
-    # file_expe_name = save_rootname / Path(expe_name + ".pth")
-
-    # if load_expe:
-    #     adv_mani, grid = load_model_and_grid(Phi, file_expe_name)
-    # else:
-    #     ### LAUNCH THE PARAMETERIZATION ###
-    #     adv_mani, grid = set_model_and_grid(Phi, x_est, sing_vects=sing_vects,
-    #                                         grid_dim=n_sing_to_compute,
-    #                                         dir_len=dir_len,
-    #                                         n_pts_per_dim=n_pts_per_dim)
-    #     adv_mani.compute_parameterization(x_est, grid=grid, criteria=criteria,
-    #                                       optim_params=optim_params,
-    #                                       search_method="bfs",
-    #                                       verbose=verbose)
-    #     if save_expe:
-    #         adv_mani.save_results(file_expe_name, grid, expe_name=expe_name)
-
-    # adv_mani.plot_compare_with_linear(grid, x_est)
-    # adv_mani.plot_losses(grid = grid, in_SNR = True, levels = [50], color_levels = ['g'])
-    # adv_mani.plot_criteria()
-
-    # ###### FOR EACH DIRECTIONS, COMPUTE THE PARAMETERIZATION #########
-    # for i_dir in range(n_sing_to_compute):
-    #     file_expe_name = save_rootname / \
-    #         Path(expe_name + f"_dir_{i_dir+1}.pth")
-
-    #     if load_expe:
-    #         adv_mani, grid = load_model_and_grid(Phi, file_expe_name)
-    #     else:
-    #         ### LAUNCH THE PARAMETERIZATION ###
-    #         adv_mani, grid = set_model_and_grid(Phi, x_est,
-    #                                             sing_vects=sing_vects[..., i_dir],
-    #                                             grid_dim=1, dir_len=dir_len,
-    #                                             n_pts_per_dim=n_pts_per_dim)
-    #         adv_mani.compute_parameterization(x_est, grid=grid,
-    #                                           criteria=criteria,
-    #                                           optim_params=optim_params,
-    #                                           search_method="bfs",
-    #                                           verbose=verbose)
-    #         if save_expe:
-    #             adv_mani.save_results(
-    #                 file_expe_name, grid, expe_name=expe_name)
-
-    #     adv_mani.plot_compare_with_linear(grid, x_est)
-    #     adv_mani.plot_losses()
-    #     adv_mani.plot_criteria()

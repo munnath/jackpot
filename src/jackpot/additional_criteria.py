@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Thu Mar  2 14:20:24 2023
 
-@author: Pierre Weiss, Nathanael Munier 
+@author: Nathanaël Munier 
 """
 
 import torch

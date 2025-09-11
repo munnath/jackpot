@@ -16,7 +16,7 @@ WARNING : EVERY OPERATOR INCLUDED IN THIS FRAMEWORK WILL BE CONSIDERED AS MATRIX
 
 
 class Criteria(nn.Module):
-    def __init__(self, input_shape, stop=True):
+    def __init__(self, stop=True):
         """
         Class to set some additive criteria defining the adversarial manifold.
 
@@ -26,10 +26,8 @@ class Criteria(nn.Module):
         
         Parameters
         ----------
-        input_shape : tuple
-            Shape of the input tensor.
         stop : boolean, optional
-            Set if the adv_mani set search computation should stop 
+            Set if the uncertainty region search computation should stop 
                 whenever the criteria are not checked. 
             The default is True.
 
@@ -41,13 +39,12 @@ class Criteria(nn.Module):
         
         super().__init__()
         self.criteria_list = []
-        self.input_shape = input_shape
         self.stop = stop
 
     def n_criteria(self):
         return len(self.criteria_list)
 
-    def add_criterion(self, criterion_fn, threshold, less_than=True,
+    def add_criterion(self, input_shape, criterion_fn, threshold, less_than=True,
                       half_factor=0.5):
         """
         Add the criterion defined as criterion_fn(x, x0) < threshold

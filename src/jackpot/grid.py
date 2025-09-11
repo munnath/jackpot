@@ -18,7 +18,7 @@ WARNING : EVERY OPERATOR INCLUDED IN THIS FRAMEWORK WILL BE CONSIDERED AS MATRIX
 
 
 class Grid(nn.Module):
-    def __init__(self, n_pts_per_dim, lengths, directions, device, dtype):
+    def __init__(self, n_points_per_axis = None, grid_length = None, directions = None):
         """
         Initializes a discretized grid on which points of the approximated 
             manifold of the solution set will be estimated.
@@ -37,21 +37,19 @@ class Grid(nn.Module):
                 (_zero_grid_tensor_create, _tensor_set, _tensor_get)
                 
         The coordinate grid ( in R^D) is
-        $\prod_{l in lengths} l * [-n_pts_per_dim//2, ..., 0, ..., n_pts_per_dim//2] $
+        $\prod_{l in lengths} l * [-n_points_per_axis//2, ..., 0, ..., n_points_per_axis//2] $
         The ambient space grid is in R^N.
         directions @ $\prod_{l in lengths} 
-                l * [-n_pts_per_dim//2, ..., 0, ..., n_pts_per_dim//2] $
+                l * [-n_points_per_axis//2, ..., 0, ..., n_points_per_axis//2] $
         
         Parameters
         ----------
-        n_pts_per_dim : int or list or tuple
+        n_points_per_axis : int or list or tuple
             number of discretized point per each direction.
-        lengths : float or list or tuple
+        grid_length : float or list or tuple
             the coordinate space grid goes from -lengths[i] to lengths[i] for direction i.
         directions : tensor of shape (N, D)
             Set of the direction vectors that span the ambient space grid.
-        device : device
-        dtype : dtype
 
         Returns
         -------
@@ -60,36 +58,37 @@ class Grid(nn.Module):
         
         super().__init__()
 
-        assert len(directions) >= 2
-        D = directions.shape[1]
+        if directions != None:
+            assert len(directions) >= 2
+            D = directions.shape[1]
 
-        if not (type(n_pts_per_dim) in [tuple, list]):
-            n_pts_per_dim = (n_pts_per_dim,) * D
+            if not (type(n_points_per_axis) in [tuple, list]):
+                n_points_per_axis = (n_points_per_axis,) * D
 
-        if not (type(lengths) in [tuple, list]):
-            lengths = (lengths,) * D
+            if not (type(grid_length) in [tuple, list]):
+                grid_length = (grid_length,) * D
 
-        assert len(n_pts_per_dim) == D
-        assert len(lengths) == D
-        assert sum([n % 2 == 0 for n in n_pts_per_dim]) == 0
+            assert len(n_points_per_axis) == D
+            assert len(grid_length) == D
+            assert sum([n % 2 == 0 for n in n_points_per_axis]) == 0
 
-        self.D = D
-        self.device = device
-        self.dtype = dtype
-        self.n_pts_per_dim = n_pts_per_dim
-        self.lengths = lengths
-        self.lin_discretized = [torch.linspace(-self.lengths[i], self.lengths[i], n)
-                                for i, n in enumerate(self.n_pts_per_dim)]
-        self.neigborhood_list = list(itertools.product(*[[-1, 0, 1]
-                                                         for n in self.n_pts_per_dim]))
-        self.directions = directions
+            self.D = D
+            self.device = directions.device
+            self.dtype = directions.dtype
+            self.n_points_per_axis = n_points_per_axis
+            self.lengths = grid_length
+            self.lin_discretized = [torch.linspace(-self.lengths[i], self.lengths[i], n)
+                                    for i, n in enumerate(self.n_points_per_axis)]
+            self.neigborhood_list = list(itertools.product(*[[-1, 0, 1]
+                                                            for n in self.n_points_per_axis]))
+            self.directions = directions
 
     def generate_over_sampled_grid(self, subdivs):
         """
         Add (subdivs-1) regularly distributed points between two points 
             of the initial grid for every dimensions of the grid.
 
-        For instance, if (m,n) is the n_pts_per_dim parameter of the initial grid
+        For instance, if (m,n) is the n_points_per_axis parameter of the initial grid
             then (subdivs * (m-1) + 1, subdivs * (n-1) + 1) is the shape of the new grid.
         
         Example m = 5 points and subdivs = 4:
@@ -111,26 +110,25 @@ class Grid(nn.Module):
         """
         assert type(subdivs) == int and subdivs >= 1
 
-        new_n_pts_per_dim = tuple([(n_dim-1) * subdivs + 1
-                                   for n_dim in self.n_pts_per_dim])
-        over_grid = Grid(n_pts_per_dim=new_n_pts_per_dim,
+        new_n_points_per_axis = tuple([(n_dim-1) * subdivs + 1
+                                   for n_dim in self.n_points_per_axis])
+        over_grid = Grid(n_points_per_axis=new_n_points_per_axis,
                          lengths=self.lengths,
-                         directions=self.directions,
-                         device=self.device, dtype=self.dtype)
+                         directions=self.directions)
         return over_grid
 
     def get_index_generator(self):
         """
         Iterator of the coordonates of the discrete points of the grid
         """
-        return itertools.product(*[range(n_pt) for n_pt in self.n_pts_per_dim])
+        return itertools.product(*[range(n_pt) for n_pt in self.n_points_per_axis])
 
     def _get_sub_index_generator(self, subdivs):
         """
         Iterator of the coordonates of the discrete points of the sub-grid
         """
         return itertools.product(*[range(0, n_pt, subdivs)
-                                   for n_pt in self.n_pts_per_dim])
+                                   for n_pt in self.n_points_per_axis])
 
     def _init_bfs(self):
         """
@@ -183,7 +181,7 @@ class Grid(nn.Module):
             neigh_coord = tuple(
                 [i + j for i, j in zip(coordinates, neigh_add)])
             in_the_grid = [not (x_neigh >= 0 and x_neigh < n_i)
-                           for n_i, x_neigh in zip(self.n_pts_per_dim, neigh_coord)]
+                           for n_i, x_neigh in zip(self.n_points_per_axis, neigh_coord)]
             criteria_in_the_grid = (sum(in_the_grid) == 0)
 
             # Inside the grid
@@ -198,7 +196,7 @@ class Grid(nn.Module):
         """
         Coordinate of the center point of the grid
         """
-        coord_middle = tuple([coord // 2 for coord in self.n_pts_per_dim])
+        coord_middle = tuple([coord // 2 for coord in self.n_points_per_axis])
         return coord_middle
 
     def _zero_grid_tensor_create(self, supplement_dims=None, dtype=None,
@@ -218,7 +216,7 @@ class Grid(nn.Module):
 
         Returns
         -------
-        grid_tensor: tensor of shape self.n_pts_per_dim + supplement_dims
+        grid_tensor: tensor of shape self.n_points_per_axis + supplement_dims
             Storage tensor linked to the grid.
 
         """
@@ -229,7 +227,7 @@ class Grid(nn.Module):
         if supplement_dims == None:
             supplement_dims = tuple([])
 
-        return torch.zeros(self.n_pts_per_dim + supplement_dims,
+        return torch.zeros(self.n_points_per_axis + supplement_dims,
                            device=device, dtype=dtype)
 
     def _tensor_set(self, coordinates, grid_tensor, value):
@@ -283,4 +281,4 @@ class Grid(nn.Module):
         return self.D
 
     def _get_n_pts(self):
-        return prod(self.n_pts_per_dim)
+        return prod(self.n_points_per_axis)

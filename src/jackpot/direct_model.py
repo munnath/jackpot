@@ -78,23 +78,16 @@ class Model(nn.Module):
         """
         tensor_empty_cache(self._vjp_x0, self._jvp_x0)
         self._vjp_x0, self._jvp_x0 = None, None
-    
-    def partial_svd(self, x0, ):
-        pass
-    	
+
     
     def find_singular_pairs(self, x0=None, compute=True, save_result=False,
                             from_svd=True, method="svd_ATA",
-                            n_sing_vals=2, save_load_filename=None,
-                            sing_thres=0., time_max=1e10,
-                            verbose=False):
+                            n_singular_pairs=2, save_load_filename=None,
+                            max_compute_time=3600, verbose=False):
 
         assert ((from_svd and method in ["svd", "svd_ATA"]
                 ) or (not (from_svd) and method in ["lobpcg", "jacobi", "lbfgs"]))
         
-        if not(isinstance(self.Phi, Model)):
-            self.Phi = Model(self.Phi, x0)
-
         # If not already computed and there is no file -> I force the computation and save
         if not(Path(save_load_filename).is_file()) and not(compute):
             print("The singular pairs are not already computed.")
@@ -110,7 +103,7 @@ class Model(nn.Module):
             if from_svd:
                 # COMPUTE THE WHOLE JACOBIAN SINCE IT IS OF SMALL DIMENSION #
                 self.jacobian_compute(x0)
-                sing_vals, sing_vects = self.svd_extract_singular_vectors(n_sing_vals,
+                sing_vals, sing_vects = self.svd_extract_singular_vectors(n_singular_pairs,
                                                                               largest=False, 
                                                                               method=method)
             else:
@@ -118,12 +111,11 @@ class Model(nn.Module):
                     self.tolerance = 1e-12 * 2
                 elif self.dtype == torch.float64:
                     self.tolerance = 1e-24 * 2
-                sing_vects, sing_vals, _, _, _ = self.singular_pairs_solve(x0,
-                                                                               k=n_sing_vals, 
+                sing_vects, sing_vals, _, _, _ = self.singular_pairs_solve(x0, k=n_singular_pairs, 
                                                                                X_init=None,
                                                                                tol=self.tolerance,
                                                                                method=method, 
-                                                                               time_max=time_max,
+                                                                               max_compute_time=max_compute_time,
                                                                                verbose=verbose)
             
             sing_vals = torch.abs(sing_vals)

@@ -124,20 +124,20 @@ class Jackpot(nn.Module):
             if k == "experiment_name":
                 self.set_experiment_name(v)
 
-    def jac_spectrum(self):
+    def jacobian_spectrum(self, **kwargs):
         if self.load_sing_pairs:
-            self.jac_spectrum_load()
+            self.jacobian_spectrum_load(**kwargs)
         else:
-            self.jac_spectrum_compute()
+            self.jacobian_spectrum_compute(**kwargs)
             if self.save_sing_pairs:
-                self.jac_spectrum_save()
+                self.jacobian_spectrum_save()
 
 
-    def manifold(self):
+    def manifold(self, **kwargs):
         if self.load_manifold:
-            self.manifold_load()
+            self.manifold_load(**kwargs)
         else:
-            self.manifold_compute()
+            self.manifold_compute(**kwargs)
             if self.save_manifold:
                 self.manifold_save()
     
@@ -168,7 +168,7 @@ class Jackpot(nn.Module):
     def get_grid(self):
         return self.grid
     
-    def jac_spectrum_compute(self, n_singular_pairs = None, method = None, max_compute_time = None):
+    def jacobian_spectrum_compute(self, n_singular_pairs = None, method = None, max_compute_time = None):
         """
         Computing the lowest Jacobian singular pairs (sigma_i, v_i) 
             - sigma_i are the singular values
@@ -764,16 +764,6 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         z = self.cons_map @ ((x - x0).ravel())
         x_ortho = self.proj_ortho_map((x - x0).ravel())
         return z, x_ortho.view(x0.shape)
-    
-    def save_singular_pairs(self, filename, sing_vals, sing_vects):
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        torch.save((sing_vals, sing_vects), filename)
-    
-    def load_singular_pairs(self, filename):
-        sing_vals, sing_vects = torch.load(filename)
-        sing_vals = sing_vals.to(**self.factory_kwargs)
-        sing_vects = sing_vects.to(**self.factory_kwargs)
-        return sing_vals, sing_vects
 
     def _save_manifold(self, save_params_filename, grid, experiment_name=""):
         dict_save = {
@@ -828,7 +818,7 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
             return None, Path("")
         
     
-    def jac_spectrum_save(self, n_singular_pairs = None, filename = None, 
+    def jacobian_spectrum_save(self, n_singular_pairs = None, filename = None, 
                           filename_suffix = ""):
         """
         Save the actual Jacobian spectrum
@@ -855,9 +845,9 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
 
         if filename == None:
             _, filename = self._auto_jac_spec_savefile(n_singular_pairs, suffix = filename_suffix)
-        self.save_singular_pairs(filename, self.sing_vals, self.sing_vects)
+        self.model.save_singular_pairs(filename, self.sing_vals, self.sing_vects)
     
-    def jac_spectrum_load(self, n_singular_pairs = None, filename = None, filename_suffix = ""):
+    def jacobian_spectrum_load(self, n_singular_pairs = None, filename = None, filename_suffix = ""):
         """
         Load already computed Jacobian spectrum
 
@@ -879,9 +869,12 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                                                                         suffix = filename_suffix)
         
         if not(Path(filename).is_file()):
-            print(f"There is no Jacobian sprectrum saved file here: {filename}.\n")
+            print(f"There is no Jacobian sprectrum saved file here: {filename}.")
+            print(f"load_sing_pairs passed to False.")
+            self.load_sing_pairs = False
+            self.jacobian_spectrum()
         else:
-            self.sing_vals, self.sing_vects = self.load_singular_pairs(filename)
+            self.sing_vals, self.sing_vects = self.model.load_singular_pairs(filename)
             n_sing_load = self.sing_vals.numel()
             
             if n_singular_pairs != None:
@@ -891,7 +884,7 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                 
             print(f"{filename} loaded.\n")
     
-    def jac_spectrum_plot(self, filename = None, scalefact = 0.4):
+    def jacobian_spectrum_plot(self, filename = None, scalefact = 0.4):
         """
         Plot the Jacobian spectrum.
 
@@ -921,7 +914,7 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                 plt.savefig(filename, bbox_inches='tight', pad_inches=0)
             plt.show()
         else:
-            print("There is no Jacobian singular spectrum to plot. \n Please compute or load it through jac_spectrum_compute or jac_spectrum_load functions.")
+            print("There is no Jacobian singular spectrum to plot. \n Please compute or load it through jacobian_spectrum_compute or jacobian_spectrum_load functions.")
     
     def manifold_compute(self, D = None, epsilon = None, n_points_per_axis = None, grid_length = None,
                                     add_criteria = None, directions = None, 
@@ -1056,6 +1049,11 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                 epsilon_file = float(m.group(2))
                 n_file       = int(m.group(3))
                 L_file       = float(m.group(4))
+                
+                print(D, D_file)
+                print(epsilon, epsilon_file)
+                print(n_points_per_axis, n_file)
+                print(grid_length, L_file)
 
                 # Check only non-None params
                 if (D is None or D == D_file) and \
@@ -1086,10 +1084,33 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         None.
 
         """
+
+        # Check that all required input values are given
+        assert D != None or self.D != None, "The dimension of the manifold is required! Please give a value to Jackpot.D."
+        assert epsilon != None or self.epsilon != None, "The output discrepancy threshold of the manifold is required. Please give a value to Jackpot.epsilon."
+        assert n_points_per_axis != None or self.n_points_per_axis != None, "The number of points in each directions of the tangent grid of the manifold is required! Please give a value to Jackpot.n_points_per_axis."
+        assert grid_length != None or self.grid_length != None, "The lenghts of the grid in each directions of the tangent grid of the manifold is required. Please give a value to Jackpot.grid_length."
+
+        if D == None:
+            D = self.D
+
+        if epsilon == None:
+            epsilon = self.epsilon
+
+        if n_points_per_axis == None:
+            n_points_per_axis = self.n_points_per_axis
+
+        if grid_length == None:
+            grid_length = self.grid_length
+
         if filename == None:
-            (self.D, self.epsilon, self.n_points_per_axis, 
-             self.grid_length, filename) = self._auto_manifold_savefile(D, epsilon, n_points_per_axis, 
+            (D, epsilon, n_points_per_axis, 
+             grid_length, filename) = self._auto_manifold_savefile(D, epsilon, n_points_per_axis, 
                                                                    grid_length, suffix = filename_suffix)
+            
+            if filename != Path(""):
+                (self.D, self.epsilon, 
+                 self.n_points_per_axis, self.grid_length) = (D, epsilon, n_points_per_axis, grid_length)
         else:
             #Add filename suffix
             root, ext = str(filename).rsplit('.', 1)
@@ -1097,6 +1118,9 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         
         if not(Path(filename).is_file()):
             print(f"There is no Jackpot manifold saved file here: {filename}.")
+            print(f"load_manifold passed to False.")
+            self.load_manifold = False
+            self.manifold()
         else:
             # Load x_est to get device and dtype
             dict_load = torch.load(filename)
@@ -1319,7 +1343,7 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
             if in_figure:    
                 plt.figure()
             plt.plot(snr_loss.tolist())
-            if save:
+            if self.save_plot:
                 plt.savefig(filename, bbox_inches='tight', pad_inches=0)
             plt.title(title)
             if in_figure:

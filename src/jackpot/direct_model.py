@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 
 from pathlib import Path
+import os
 
 from tqdm import tqdm
 from .singular_solvers import SingularSolver, singular_vectors
@@ -57,6 +58,7 @@ class Model(nn.Module):
         self.Phi = FlatForward(Phi, self.input_shape)
         self.device = x_example.device
         self.dtype = x_example.dtype
+        self.factory_kwargs = {'device': self.device, 'dtype': self.dtype}
         self.jac = None
         self.singular_values = None
         self.parallel = parallel
@@ -356,3 +358,13 @@ class Model(nn.Module):
         self.solver = None
 
         return (X, sing_vals, hist_ray, hist_sing, hist_time)
+    
+    def load_singular_pairs(self, filename):
+        sing_vals, sing_vects = torch.load(filename)
+        sing_vals = sing_vals.to(**self.factory_kwargs)
+        sing_vects = sing_vects.to(**self.factory_kwargs)
+        return sing_vals, sing_vects
+
+    def save_singular_pairs(self, filename, sing_vals, sing_vects):
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        torch.save((sing_vals, sing_vects), filename)

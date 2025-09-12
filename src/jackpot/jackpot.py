@@ -16,7 +16,6 @@ import torch.optim as optim
 from matplotlib import colors
 from tqdm import tqdm
 
-from .manifold import Manifold
 from .direct_model import Model
 from .additional_criteria import Criteria
 from .grid import Grid
@@ -83,13 +82,20 @@ class Jackpot(nn.Module):
         self.load_manifold = False
         self.save_manifold = True
 
+        # DISCRETIZED MANIFOLD DATASET
+        self.mani_dataset_evals = None
+        self.mani_dataset_losses = None
+        self.mani_dataset_is_computed = None
+        self.mani_dataset_optim_steps = None
+        self.mani_dataset_critera_vals = None
+        self.mani_dataset_critera_valid = None
+
         if Phi != None and x_est != None:
             self.Phi = Phi
             self.x_est = x_est
             
-            # Set the direct model and the Manifold
+            # Set the direct model
             self.model = Model(self.Phi, self.x_est, parallel = parallel)
-            self._manifold = Manifold()
 
             self.grid = Grid()
             self.sing_vals = None
@@ -98,7 +104,17 @@ class Jackpot(nn.Module):
         self.save_plot = True
     
     def __repr__(self):
-        return 'NATHANAEL MUNIER - 2024'
+        return (
+            f"Jackpot(\n"
+            f"  experiment_name = {self.experiment_name!r},\n"
+            f"  input_shape     = {getattr(self.model, 'input_shape', None)},\n"
+            f"  output_shape    = {getattr(self.model, 'output_shape', None)},\n"
+            f"  device          = {self.device},\n"
+            f"  dtype           = {self.dtype},\n"
+            f"  manifold_dim    = {self.D},\n"
+            f"  epsilon         = {self.epsilon}\n"
+            f")"
+        )
 
     def set_params(self, **params):
         for k, v in params.items():
@@ -151,9 +167,6 @@ class Jackpot(nn.Module):
     
     def get_grid(self):
         return self.grid
-        
-    def get_manifold(self):
-        return self._manifold
     
     def jac_spectrum_compute(self, n_singular_pairs = None, method = None, max_compute_time = None):
         """
@@ -257,16 +270,16 @@ class Jackpot(nn.Module):
             self.cons_map.T @ (self.cons_map @ x)
 
         #################### Initialize the storage variables ###################
-        self._manifold.param_evals = act_grid._zero_grid_tensor_create(device="cpu",
+        self.mani_dataset_evals = act_grid._zero_grid_tensor_create(device="cpu",
                                                              supplement_dims=self.x_est.shape)
-        self._manifold.param_losses = act_grid._zero_grid_tensor_create(device="cpu")
-        self._manifold.param_is_computed = act_grid._zero_grid_tensor_create(device="cpu",
+        self.mani_dataset_losses = act_grid._zero_grid_tensor_create(device="cpu")
+        self.mani_dataset_is_computed = act_grid._zero_grid_tensor_create(device="cpu",
                                                                    dtype=torch.bool)
-        self._manifold.param_optim_steps = act_grid._zero_grid_tensor_create(device="cpu",
+        self.mani_dataset_optim_steps = act_grid._zero_grid_tensor_create(device="cpu",
                                                                    dtype=torch.int)
-        self._manifold.param_criteria_vals = act_grid._zero_grid_tensor_create(device="cpu",
+        self.mani_dataset_criteria_vals = act_grid._zero_grid_tensor_create(device="cpu",
                                                                      supplement_dims=(criteria.n_criteria(),))
-        self._manifold.param_criteria_valid = act_grid._zero_grid_tensor_create(device="cpu",
+        self.mani_dataset_criteria_valid = act_grid._zero_grid_tensor_create(device="cpu",
                                                                       supplement_dims=(criteria.n_criteria(),), dtype=torch.bool)
         ################################################
         ########### MAINT PART #########################
@@ -284,9 +297,9 @@ class Jackpot(nn.Module):
             act_grid.already_in_list[tuple(actual_pt_coord)] = True
             x_ortho_init = torch.zeros((N,), **self.factory_kwargs)
 
-            act_grid._tensor_set(actual_pt_coord, self._manifold.param_is_computed, True)
+            act_grid._tensor_set(actual_pt_coord, self.mani_dataset_is_computed, True)
             act_grid._tensor_set(actual_pt_coord,
-                                 self._manifold.param_evals, send_to_cpu(self.x_est))
+                                 self.mani_dataset_evals, send_to_cpu(self.x_est))
 
             ### ADD NEIGHBOR COORDINATES TO THE LIST ###
             new_coordinates = act_grid._add_neighbors_of(actual_pt_coord)
@@ -334,14 +347,14 @@ class Jackpot(nn.Module):
                 # Compute the loss
                 loss_z = 0.5 * torch.sum((self.Phi(phi_z) - self.Phi(self.x_est))**2)
 
-                act_grid._tensor_set(actual_pt_coord, self._manifold.param_losses,
+                act_grid._tensor_set(actual_pt_coord, self.mani_dataset_losses,
                                      send_to_cpu(loss_z))
-                act_grid._tensor_set(actual_pt_coord, self._manifold.param_evals,
+                act_grid._tensor_set(actual_pt_coord, self.mani_dataset_evals,
                                      send_to_cpu(phi_z))
                 act_grid._tensor_set(
-                    actual_pt_coord, self._manifold.param_is_computed, True)
+                    actual_pt_coord, self.mani_dataset_is_computed, True)
                 act_grid._tensor_set(
-                    actual_pt_coord, self._manifold.param_optim_steps, n_optim)
+                    actual_pt_coord, self.mani_dataset_optim_steps, n_optim)
                 act_grid.already_computed[actual_pt_coord] = True
                 
                 
@@ -376,8 +389,7 @@ class Jackpot(nn.Module):
                 self.tqdm_bar.update(1)
                 
                 if save_each_iter:
-                    self._manifold.save_results(self.x_est, save_file_name, act_grid, 
-                                               experiment_name=save_experiment_name)
+                    self._save_manifold(save_file_name, act_grid, experiment_name=save_experiment_name)
 
             ################################################
             ########### POST COMPUTATION ###################
@@ -398,26 +410,26 @@ class Jackpot(nn.Module):
                     x = x.view(output_grid.n_points_per_axis + x.shape[1:])
                     return x
 
-                self._manifold.param_evals = sub_sample(self._manifold.param_evals)
-                self._manifold.param_losses = sub_sample(self._manifold.param_losses)
-                self._manifold.param_is_computed = sub_sample(self._manifold.param_is_computed)
-                self._manifold.param_optim_steps = sub_sample(self._manifold.param_optim_steps)
-                self._manifold.param_criteria_vals = sub_sample(self._manifold.param_criteria_vals)
-                self._manifold.param_criteria_valid = sub_sample(
-                    self._manifold.param_criteria_valid)
+                self.mani_dataset_evals = sub_sample(self.mani_dataset_evals)
+                self.mani_dataset_losses = sub_sample(self.mani_dataset_losses)
+                self.mani_dataset_is_computed = sub_sample(self.mani_dataset_is_computed)
+                self.mani_dataset_optim_steps = sub_sample(self.mani_dataset_optim_steps)
+                self.mani_dataset_criteria_vals = sub_sample(self.mani_dataset_criteria_vals)
+                self.mani_dataset_criteria_valid = sub_sample(
+                    self.mani_dataset_criteria_valid)
 
             grid = output_grid
 
             # SAVE THE CRITERION VALUES OF EACH PARAMETERIZATION POINTS #
             for index in grid.get_index_generator():
-                if grid._tensor_get(index, self._manifold.param_is_computed):
-                    x_ind = grid._tensor_get(index, self._manifold.param_evals)
+                if grid._tensor_get(index, self.mani_dataset_is_computed):
+                    x_ind = grid._tensor_get(index, self.mani_dataset_evals)
                     x_ind = x_ind.to(**self.factory_kwargs)
 
                     values, evaluates = criteria.evaluate_in_detail(x_ind, self.x_est)
-                    grid._tensor_set(index, self._manifold.param_criteria_vals,
+                    grid._tensor_set(index, self.mani_dataset_criteria_vals,
                                      torch.tensor(values, device="cpu"))
-                    grid._tensor_set(index, self._manifold.param_criteria_valid,
+                    grid._tensor_set(index, self.mani_dataset_criteria_valid,
                                      torch.tensor(evaluates, dtype=torch.bool, device="cpu"))
 
     def compute_local_param(self, z, x_ortho_init, actual_pt_coord,
@@ -659,6 +671,11 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         grid._init_bfs()
         return grid
     
+
+    # def _set_direction_list(self, direction_list):
+    #     self._is_a_valid_direction_list(direction_list)
+    #     self.direction_list = direction_list
+    
     def plot_singular_values(self, title="", normalized=True):
         """ Plot the pre-computed singular values of the jacobian of Phi"""
 
@@ -712,15 +729,14 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         x = x_est.ravel() + self.cons_map.T @ z + self.proj_ortho_map(x_ortho)
         return x.view(x_est.shape)
 
-
-    def _is_a_valid_direction_list(self, direction_list):
-        with torch.no_grad():
-            _, N = self.model._get_dims()
-            sh = direction_list.shape
-            assert len(sh) == 2
-            valid_test = (sh[-1] == N)
-            valid_test = direction_list.shape
-            assert valid_test
+    # def _is_a_valid_direction_list(self, direction_list):
+    #     with torch.no_grad():
+    #         _, N = self.model._get_dims()
+    #         sh = direction_list.shape
+    #         assert len(sh) == 2
+    #         valid_test = (sh[-1] == N)
+    #         valid_test = direction_list.shape
+    #         assert valid_test
 
     def _x_get_decomposition(self, x, x0):
         """
@@ -758,6 +774,25 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         sing_vals = sing_vals.to(**self.factory_kwargs)
         sing_vects = sing_vects.to(**self.factory_kwargs)
         return sing_vals, sing_vects
+
+    def _save_manifold(self, save_params_filename, grid, experiment_name=""):
+        dict_save = {
+            "x_est": self.x_est,
+            "mani_dataset_evals": self.mani_dataset_evals,
+            "mani_dataset_losses": self.mani_dataset_losses,
+            "mani_dataset_is_computed": self.mani_dataset_is_computed,
+            "mani_dataset_optim_steps": self.mani_dataset_optim_steps,
+            "mani_dataset_criteria_vals": self.mani_dataset_criteria_vals,
+            "mani_dataset_criteria_valid": self.mani_dataset_criteria_valid,
+            "device": self.device,
+            "dtype": self.dtype,
+            "experiment_name": experiment_name,
+            "grid_length": grid.lengths,
+            "n_points_per_axis": grid.n_points_per_axis,
+            "direction_list": grid._directions_get(),
+        }
+        os.makedirs(os.path.dirname(save_params_filename), exist_ok=True)
+        torch.save(dict_save, save_params_filename)
     
     def check_singular_vectors(self, x_est, sing_vals, sing_vects):
         
@@ -952,7 +987,7 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         max_iter_per_step = 1000
         max_iter = 10
 
-        optim_params = self._manifold.optim_parameters(optim_method, max_iter,
+        optim_params = self.optim_parameters(optim_method, max_iter,
                                                  max_iter_per_step, history_size, 
                                                  line_search, lr, subdivs,
                                                  tol_change = 1e-5, tol_grad = 1e-5)
@@ -1032,42 +1067,6 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
             # Nothing found
             return D, epsilon, n_points_per_axis, grid_length, Path("")
     
-    def _load_manifold_and_grid(self, file_experiment_name):
-        """
-        Load a previoulsy saved model.
-
-        Parameters
-        ----------
-        file_experiment_name : path string
-            File where to load the model
-
-        Returns
-        -------
-        manifold : Manifold
-            Loaded manifold.
-        grid : Grid
-            Loaded discretized grid.
-        """
-        # Load x_est to get device and dtype
-        dict_load = torch.load(file_experiment_name)
-        self.device = dict_load["device"]
-        self.dtype = dict_load["dtype"]
-        self.factory_kwargs = {"device":self.device, "dtype":self.dtype}
-
-        self.x_est = dict_load["x_est"].to(**self.factory_kwargs)
-
-        # Set the Manifold
-        manifold = Manifold()
-        manifold.load_results(file_experiment_name)
-
-        # Set the grid
-        grid = self.set_grid_from_direction_list(
-                direction_list=directions, grid_length = grid_len, 
-                n_points_per_axis=n_points_per_axis)
-
-        return manifold, grid
-    
-    
     def manifold_load(self, D=None, epsilon=None, n_points_per_axis=None, 
                       grid_length=None, filename = None, filename_suffix = ""):
         """
@@ -1090,8 +1089,7 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         if filename == None:
             (self.D, self.epsilon, self.n_points_per_axis, 
              self.grid_length, filename) = self._auto_manifold_savefile(D, epsilon, n_points_per_axis, 
-                                                                   grid_length, 
-                                                                   suffix = filename_suffix)
+                                                                   grid_length, suffix = filename_suffix)
         else:
             #Add filename suffix
             root, ext = str(filename).rsplit('.', 1)
@@ -1100,12 +1098,39 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         if not(Path(filename).is_file()):
             print(f"There is no Jackpot manifold saved file here: {filename}.")
         else:
-            self._manifold, self.grid = self._load_manifold_and_grid(filename)
+            # Load x_est to get device and dtype
+            dict_load = torch.load(filename)
+            self.device = dict_load["device"]
+            self.dtype = dict_load["dtype"]
+            self.factory_kwargs = {"device":self.device, "dtype":self.dtype}
+
+            self.x_est = dict_load["x_est"].to(**self.factory_kwargs)
+
+            self.experiment_name = dict_load["experiment_name"]
+
+            # Set the Manifold Dataset
+            self.mani_dataset_evals = dict_load["mani_dataset_evals"]
+            self.mani_dataset_losses = dict_load["mani_dataset_losses"]
+            self.mani_dataset_is_computed = dict_load["mani_dataset_is_computed"]
+            self.mani_dataset_optim_steps = dict_load["mani_dataset_optim_steps"]
+            self.mani_dataset_criteria_vals = dict_load["mani_dataset_criteria_vals"]
+            self.mani_dataset_criteria_valid = dict_load["mani_dataset_criteria_valid"]
+            
+            direction_list = dict_load["direction_list"]
+            n_points_per_axis = dict_load["n_points_per_axis"]
+            grid_length = dict_load["grid_length"]
+
+
+            # Set the grid
+            self.grid = self.set_grid_from_direction_list(
+                direction_list=direction_list, grid_length = grid_length, 
+                n_points_per_axis=n_points_per_axis)
+
             print(f"{filename} loaded.")
     
     def manifold_save(self, filename = None, filename_suffix = ""):
         """
-        Save actual adversarial manifold
+        Save actual manifold
 
         Parameters
         ----------
@@ -1121,14 +1146,59 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         """
         if filename == None:
             _, _, _, _, filename = self._auto_manifold_savefile(self.D, self.epsilon, self.n_points_per_axis, 
-                                                       self.grid_length, suffix = filename_suffix)
+                                                                self.grid_length, suffix = filename_suffix)
         else:
             #Add filename suffix
             root, ext = str(filename).rsplit('.', 1)
             filename = Path(f"{root}{filename_suffix}.{ext}")
         
-        self._manifold.save_results(self.x_est, filename, self.grid, experiment_name=self.experiment_name)
+        self._save_manifold(filename, self.grid, experiment_name=self.experiment_name)
 
+    def optim_parameters(self, method="L-BFGS", max_iter=10,
+                         max_iter_per_step=200, history_size=10,
+                         line_search="strong_wolfe", lr=1.,
+                         subdivs=1, tol_change = 1e-5, tol_grad = 1e-5):
+        optim_params = {}
+
+        optim_params["method"] = method
+        optim_params["max_iter_per_step"] = max_iter_per_step
+        optim_params["max_iter"] = max_iter
+        optim_params["line_search"] = line_search
+        optim_params["lr"] = lr
+        optim_params["subdivs"] = subdivs
+        optim_params["history_size"] = history_size
+        optim_params["tol_change"] = tol_change
+        optim_params["tol_grad"] = tol_grad
+
+        return optim_params
+
+
+    def plot_criteria(self, valid_count = True):
+        sh = self.mani_dataset_criteria_valid.shape
+        n_criteria = sh[-1]
+        grid_dim = len(sh) - 1
+        if grid_dim == 1:  # Grid of dim 1
+            for i in range(n_criteria):
+                plt.figure()
+                if valid_count:
+                    plt.plot((self.mani_dataset_criteria_vals[..., i] *
+                              self.mani_dataset_criteria_valid[..., i]).tolist())
+                else:
+                    plt.plot((self.mani_dataset_criteria_vals[..., i]).tolist())
+                plt.title(f"criteria {i+1}")
+                plt.show()
+        elif grid_dim == 2:  # Grid of dim 2
+            for i in range(n_criteria):
+                plt.figure()
+                if valid_count:
+                    plt.imshow((self.mani_dataset_criteria_vals[..., i] *
+                                self.mani_dataset_criteria_valid[..., i]).tolist())
+                else:
+                    plt.imshow((self.mani_dataset_criteria_vals[..., i]).tolist())
+                plt.colorbar()
+                plt.title(f"criteria {i+1}")
+                plt.show()
+    
     def plot_compare_with_linear(self, grid, x_est, with_linear=True,
                                  output_operator=None, norm_type="L2",
                                  relative=True, semilogy=None):
@@ -1164,7 +1234,7 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                 in_snr_lin = torch.zeros((grid.n_points_per_axis))
                 out_snr_lin = torch.zeros((grid.n_points_per_axis))
                 for ind in grid.get_index_generator():
-                    if self._manifold.param_is_computed[ind]:
+                    if self.mani_dataset_is_computed[ind]:
                         evals_i = x_init + (grid.coord_to_z(ind) *
                                             grid.directions[..., 0].view(x_init.shape))
                         x_actual = evals_i
@@ -1185,12 +1255,12 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                 out_snr_lin[ind_middle] = torch.inf
 
             # WITH OPTIMIZATION
-            evals = self._manifold.param_evals
+            evals = self.mani_dataset_evals
 
             in_snr_list = torch.zeros((grid.n_points_per_axis))
             out_snr_list = torch.zeros((grid.n_points_per_axis))
             for ind in grid.get_index_generator():
-                if self._manifold.param_is_computed[ind]:
+                if self.mani_dataset_is_computed[ind]:
                     if ind != grid._coord_initial_point():
                         x_actual = evals[ind + (Ellipsis,)].to(self.device)
 
@@ -1236,14 +1306,14 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                     levels = None, color_levels = None, title = "Output losses",
                     in_figure = True):
         
-        grid_dim = self._manifold.param_losses.ndim
+        grid_dim = self.mani_dataset_losses.ndim
         if in_SNR:
             y0_norm = torch.log10(1e-64 + torch.sum((self.Phi(self.x_est))**2)).to('cpu')
-            snr_loss = 10 * (y0_norm - torch.log10(2 * self._manifold.param_losses))
+            snr_loss = 10 * (y0_norm - torch.log10(2 * self.mani_dataset_losses))
             snr_loss[snr_loss > 1000] = torch.inf
             norm = None
         else:
-            snr_loss = self._manifold.param_losses
+            snr_loss = self.mani_dataset_losses
             norm = colors.LogNorm()
         
         if grid_dim == 1:  # Grid of dim 1
@@ -1298,7 +1368,7 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                 plt.show()
 
     def plot_fn_evals(self, fn, grid, title="", device=None):
-        grid_dim = self._manifold.param_losses.ndim
+        grid_dim = self.mani_dataset_losses.ndim
 
         if (fn == "Id") or (fn is None):
             def fn(x): return x
@@ -1312,9 +1382,9 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                                                  supplement_dims=y.shape)
 
         for ind in grid.get_index_generator():
-            if self._manifold.param_is_computed[ind]:
+            if self.mani_dataset_is_computed[ind]:
 
-                xi = self._manifold.param_evals[ind + (Ellipsis,)].to(**self.factory_kwargs).view(self.Phi.input_shape)
+                xi = self.mani_dataset_evals[ind + (Ellipsis,)].to(**self.factory_kwargs).view(self.Phi.input_shape)
 
                 grid._tensor_set(ind, fn_evals, (fn(xi)).to(device=device))
 
@@ -1358,7 +1428,7 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         if filename == None:
             filename = self.fname_manifold_plot
         
-        if self._manifold.param_losses != None:
+        if self.mani_dataset_losses != None:
             self.plot_losses(filename = filename, grid = self.grid, in_SNR = in_SNR, levels = levels, color_levels = color_levels)
         else:
             print("There is no adversarial manifold discrepancy to plot. \n Please compute or load it through manifold_compute or manifold_load functions.")

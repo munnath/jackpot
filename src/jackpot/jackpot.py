@@ -1172,7 +1172,6 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
 
         return optim_params
 
-
     def plot_criteria(self, valid_count = True):
         sh = self.mani_dataset_criteria_valid.shape
         n_criteria = sh[-1]
@@ -1431,4 +1430,4 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
         if self.mani_dataset_losses != None:
             self.plot_losses(filename = filename, grid = self.grid, in_SNR = in_SNR, levels = levels, color_levels = color_levels)
         else:
-            print("There is no adversarial manifold discrepancy to plot. \n Please compute or load it through manifold_compute or manifold_load functions.")
+            print("There is no manifold discrepancy to plot. \n Please compute or load it through manifold function.")

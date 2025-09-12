@@ -287,7 +287,7 @@ class Model(nn.Module):
         return (sing_vals, sing_vects.T)
 
     def singular_pairs_solve(self, x0, k, X_init=None, method="lobpcg",
-                             tol=1e-10, niter=100000, time_max=1e10,
+                             tol=1e-10, niter=100000, max_compute_time=1e10,
                              verbose=False):
         """
         Compute the k right singular pairs of the jacobian J_Phi(x0) of the 
@@ -310,7 +310,7 @@ class Model(nn.Module):
             "lobpcg", "jacobi" or "lbfgs"
         niter : int, optional
             Number of iterations. The default is 100.
-        time_max : float, optional
+        max_compute_time : float, optional
             Maximum time of computation. The default is 1e10.
         verbose : bool, optional
             Verbose. The default is False.
@@ -350,7 +350,7 @@ class Model(nn.Module):
                                      parallel=self.parallel)
 
         (X, sing_vals, hist_ray, hist_sing, hist_time
-         ) = self.solver.lobpcg(n_step = niter, X_init = X_init, tol = tol, time_max = time_max, largest = False)
+         ) = self.solver.lobpcg(n_step = niter, X_init = X_init, tol = tol, max_compute_time = max_compute_time, largest = False)
 
         self.solver.empty_all()
         self.solver = None

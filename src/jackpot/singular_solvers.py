@@ -274,7 +274,7 @@ class SingularSolver(nn.Module):
             self.history_sing_vals.append(sing_vals_list)
             self.history_time.append(time() - self.time0)
 
-    def stopping_criteria(self, ray_actual, tol, time_max):
+    def stopping_criteria(self, ray_actual, tol, max_compute_time):
         with torch.no_grad():
             # Set ray_actual and ray_prev in float type
             if isinstance(ray_actual, torch.Tensor):
@@ -288,7 +288,7 @@ class SingularSolver(nn.Module):
             self.ray_prev = self.ray_actual
 
             # Add time stopping criteria
-            stop_criteria = stop_criteria or (time() - self.time0 > time_max)
+            stop_criteria = stop_criteria or (time() - self.time0 > max_compute_time)
 
             return stop_criteria
 
@@ -358,7 +358,7 @@ class SingularSolver(nn.Module):
 
             sing_solver_plot_history(hist_ray, hist_sing, hist_time)
 
-    def lobpcg(self, n_step=100, X_init=None, tol=1e-5, time_max=1e10,
+    def lobpcg(self, n_step=100, X_init=None, tol=1e-5, max_compute_time=1e10,
                precond_fn=None, largest=False, method="ortho"):
 
         self.initialize_optim_rayleigh()
@@ -384,7 +384,7 @@ class SingularSolver(nn.Module):
                 self.tqdm_set_description(ray_actual, sing_vals, t, "lobpcg")
 
                 if lobpcg_worker.ivars["istep"] % 10 == 0:
-                    if self.stopping_criteria(ray_actual, tol, time_max):
+                    if self.stopping_criteria(ray_actual, tol, max_compute_time):
                         lobpcg_worker.bvars['force_stop'] = True
 
             t.update(1)

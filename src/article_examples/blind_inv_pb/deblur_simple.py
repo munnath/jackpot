@@ -152,13 +152,10 @@ class Deblurring(nn.Module):
             
             # Specify the denoising prior
             denoiser=DRUNet(pretrained=None, train=False, device=self.device).to(self.dtype)
+
+            ckpt_path = "../../model_zoo/drunet_color.pth"
             
-            if os.getlogin() == "nmunier":
-                ckpt_path = os.path.expanduser("/home/nmunier/Documents/These/identifying_the_non_identifiable/codes/ipms_scripts/weights/kai_zhang_drunet_color.pth")
-            elif os.getlogin() == "munier":
-                ckpt_path = os.path.expanduser("~/MAMBO_SHARE/weights/kai_zhang_drunet_color.pth")
-            
-            temp_pth = torch.load(ckpt_path)
+            temp_pth = torch.load(str(ckpt_path), map_location=self.device)
             denoiser.load_state_dict(temp_pth)
             prior = PnP(denoiser)
             

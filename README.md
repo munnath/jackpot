@@ -33,6 +33,8 @@ Follow these steps:
 2. Define your direct model $\Phi$ and an initial parameter vector $x_{\text{est}}$ near your target  $x^\star$.
 3. Run Jackpot in two stages: jacobian spectrum and manifold.
 
+This is summarized here:
+
 ```python
 jack = Jackpot(Phi, x_est)
 jack.set_params(**params)

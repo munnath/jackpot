@@ -24,3 +24,6 @@ htmlcov/
 # Saves from tutorial
 .notebooks/saves/
 
+
+#Others docs
+.ipynb_checkpoints/

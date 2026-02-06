@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jackpot"
 version = "0.1.4"
-description = "Adversarial manifold & singular solver tooling for Jackpot experiments"
+description = "Adversarial manifold & singular solver tool for Jackpot experiments"
 readme = "README.md"
 authors = [
-  { name="Nathanaël Munier", email="nathanael.munier@ens-rennes.fr" }
+  { name="Nathanaël Munier", email="nathanael.munier@uni-graz.at" }
 ]
 requires-python = ">=3.8"
 dependencies = [
@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://gitlab.irit.fr/mambo/nathanael_munier/jackpot"
+Homepage = "https://github.com/munnath/jackpot"
 
 [tool.setuptools.packages.find]
 where = ["src"]

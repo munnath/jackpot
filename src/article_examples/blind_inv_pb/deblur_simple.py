@@ -151,13 +151,9 @@ class Deblurring(nn.Module):
             data_fidelity = L2()
             
             # Specify the denoising prior
-            denoiser=DRUNet(pretrained=None, device=self.device).to(self.dtype)
+            denoiser=DRUNet(pretrained="download", in_channels=3, out_channels=3, device=self.device).to(self.dtype)
             denoiser.train()
 
-            ckpt_path = "../../model_zoo/drunet_color.pth"
-            
-            temp_pth = torch.load(str(ckpt_path), map_location=self.device)
-            denoiser.load_state_dict(temp_pth)
             prior = PnP(denoiser)
             
             for p in prior.parameters():

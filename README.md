@@ -21,15 +21,17 @@ The 3 main experiments provided in the [article](https://jmlr.org/papers/v26/24-
 
 Jackpot approximates the uncertainty region
 
-$\mathcal{U}_\varepsilon(x^\star) = \{ x \in \mathbb{R}^N : \|\Phi(x) - \Phi(x^\star)\| \leq \varepsilon \}$
+```math
+\mathcal{U}_\varepsilon(x^\star) = \{ x \in \mathbb{R}^N : \|\Phi(x) - \Phi(x^\star)\| \leq \varepsilon \}
+```
 
 by constructing a low-dimensional adversarial manifold $\mathcal{M}_\varepsilon(x^\star)$ using Jacobian-based optimization.
 
 Follow these steps:
 
-1) Configure Jackpot parameters: Set experiment metadata (e.g., name), manifold dimension $D$, tolerance  $\varepsilon$, grid resolution, and whether to load/save intermediate results.
-2) Define your direct model $\Phi$ and an initial parameter vector $x_{\text{est}}$ near your target  $x^\star$.
-3) Run Jackpot in two stages: jacobian spectrum and manifold.
+1. Configure Jackpot parameters: Set experiment metadata (e.g., name), manifold dimension $D$, tolerance  $\varepsilon$, grid resolution, and whether to load/save intermediate results.
+2. Define your direct model $\Phi$ and an initial parameter vector $x_{\text{est}}$ near your target  $x^\star$.
+3. Run Jackpot in two stages: jacobian spectrum and manifold.
 
 ```python
 jack = Jackpot(Phi, x_est)

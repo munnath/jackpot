@@ -28,5 +28,4 @@ htmlcov/
 #Others docs
 .ipynb_checkpoints/
 notebooks/saves/
-src/model_zoo/
 

@@ -151,7 +151,8 @@ class Deblurring(nn.Module):
             data_fidelity = L2()
             
             # Specify the denoising prior
-            denoiser=DRUNet(pretrained=None, train=False, device=self.device).to(self.dtype)
+            denoiser=DRUNet(pretrained=None, device=self.device).to(self.dtype)
+            denoiser.train()
 
             ckpt_path = "../../model_zoo/drunet_color.pth"
             

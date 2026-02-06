@@ -21,9 +21,10 @@ The 3 main experiments provided in the [article](https://jmlr.org/papers/v26/24-
 
 Jackpot approximates the uncertainty region
 
-$$
+$
 \mathcal{U}_\varepsilon(x^\star) = \{ x \in \mathbb{R}^N : \|\Phi(x) - \Phi(x^\star)\| \leq \varepsilon \}
-$$
+$
+
 by constructing a low-dimensional adversarial manifold $\mathcal{M}_\varepsilon(x^\star)$ using Jacobian-based optimization.
 
 Follow these steps:

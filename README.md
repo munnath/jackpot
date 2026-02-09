@@ -5,7 +5,7 @@ Jackpot is a Python package implementing the methods described in [this paper](h
 ## Installation
 
 ```bash
-pip install -e .
+pip install .
 ```
 
 ## Some tutorials

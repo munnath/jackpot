@@ -152,7 +152,6 @@ class Deblurring(nn.Module):
             
             # Specify the denoising prior
             denoiser=DRUNet(pretrained="download", in_channels=3, out_channels=3, device=self.device).to(self.dtype)
-            denoiser.test()
 
             prior = PnP(denoiser)
             

@@ -40,6 +40,7 @@ jack = Jackpot(Phi, x_est)
 jack.set_params(**params)
 jack.jacobian_spectrum()
 jack.manifold()
+
 ```
 
 ## Independent interest:

@@ -87,8 +87,8 @@ class Jackpot(nn.Module):
         self.mani_dataset_losses = None
         self.mani_dataset_is_computed = None
         self.mani_dataset_optim_steps = None
-        self.mani_dataset_critera_vals = None
-        self.mani_dataset_critera_valid = None
+        self.mani_dataset_criteria_vals = None
+        self.mani_dataset_criteria_valid = None
 
         if Phi != None and x_est != None:
             self.Phi = Phi
@@ -107,8 +107,8 @@ class Jackpot(nn.Module):
         return (
             f"Jackpot(\n"
             f"  experiment_name = {self.experiment_name!r},\n"
-            f"  input_shape     = {getattr(self.model, 'input_shape', None)},\n"
-            f"  output_shape    = {getattr(self.model, 'output_shape', None)},\n"
+            f"  input_shape     = {tuple(getattr(self.model, 'input_shape', (0,)))},\n"
+            f"  output_shape    = {tuple(getattr(self.model, 'output_shape', (0,)))},\n"
             f"  device          = {self.device},\n"
             f"  dtype           = {self.dtype},\n"
             f"  manifold_dim    = {self.D},\n"
@@ -140,6 +140,9 @@ class Jackpot(nn.Module):
             self.manifold_compute(**kwargs)
             if self.save_manifold:
                 self.manifold_save()
+
+    def get_results(self):
+        return self.mani_dataset_evals
     
     def set_experiment_name(self, experiment_name, save_rootname = None):
         # EXPERIMENT NAME

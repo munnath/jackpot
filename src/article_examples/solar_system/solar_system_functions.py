@@ -380,6 +380,8 @@ class SolarModel(nn.Module):
         ax.set_xlim([-lims, lims])
         ax.set_ylim([-lims, lims])
         ax.set_zlim([-lims, lims])
+        
+        plt.legend(self.planet_names)
 
     def plot_param(self, param):
         fig = plt.figure()

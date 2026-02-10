@@ -36,6 +36,7 @@ Follow these steps:
 This is summarized here:
 
 ```python
+from jackpot import Jackpot
 jack = Jackpot(Phi, x_est)
 jack.set_params(**params)
 jack.jacobian_spectrum()

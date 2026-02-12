@@ -267,7 +267,7 @@ class DirectModel():
 
         # Gradient step parameters
         self.init_grad_step = self.recompute_map
-        self.n_iter = max_iter #500
+        self.n_iter = 50
         
         # if model == "partial_fft":
         #     self.stepsize = 0.000001 / self.l_l2  # 1e-1

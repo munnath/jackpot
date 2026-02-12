@@ -316,27 +316,12 @@ class SingularSolver(nn.Module):
             history of the time values.
 
         """
-        # with torch.no_grad():
-        #     if n_vect_to_keep is None:
-        #         n_vect_to_keep = self.k_sing_vals
-
-        #     X, _ = torch.linalg.qr(X)
-
-        # MatX = self.multi_Mat(X)
 
         with torch.no_grad():
-            # X_H_X = MatX.T @ MatX
 
-            # U, S, _ = torch.linalg.svd(X_H_X)
-            # U, sing_vals = U.flip((1,)), S.flip((0,))[:n_vect_to_keep]**0.5
-            # X = X @ U[:, :n_vect_to_keep]
-
-            # tensor_empty_cache(U, X_H_X, MatX, S)
-            # del U, X_H_X, MatX, S
-
-            (hist_ray, hist_sing, hist_time) = (self.history_ray_quotient,
-                                                self.history_sing_vals,
-                                                self.history_time)
+            (hist_ray, hist_sing, hist_time) = (self.history_ray_quotient.detach(),
+                                                self.history_sing_vals.detach(),
+                                                self.history_time.detach())
 
             return (X, hist_ray, hist_sing, hist_time)
 
@@ -363,31 +348,33 @@ class SingularSolver(nn.Module):
 
         self.initialize_optim_rayleigh()
 
-        def single_apply_A(x): return self.MatT(
-            self.Mat(x.view(self.input_shape))).ravel()
+        def single_apply_A(x): 
+            with torch.no_grad():
+                return self.MatT(self.Mat(x.view(self.input_shape))).ravel()
         apply_A = MultiApply(single_apply_A, self.parallel)
         A_shape = (self.N, self.N)
         A_device = self.device
         A_dtype = self.dtype
 
-        def single_apply_sub_A(x): return self.Mat(
-            x.view(self.input_shape)).ravel()
+        def single_apply_sub_A(x): 
+            with torch.no_grad():
+                return self.Mat(x.view(self.input_shape)).ravel()
         apply_sub_A = MultiApply(single_apply_sub_A, self.parallel)
         sub_dim_A = self.M
 
         t = tqdm(total=n_step)
 
         def tracker(lobpcg_worker):
-            if lobpcg_worker.ivars["istep"] > 1:
-                sing_vals = lobpcg_worker.E**0.5
-                ray_actual = torch.sum(sing_vals**2)
-                self.tqdm_set_description(ray_actual, sing_vals, t, "lobpcg")
-
-                if lobpcg_worker.ivars["istep"] % 10 == 0:
-                    if self.stopping_criteria(ray_actual, tol, max_compute_time):
-                        lobpcg_worker.bvars['force_stop'] = True
-
-            t.update(1)
+            with torch.no_grad():
+                if lobpcg_worker.ivars["istep"] > 1:
+                    sing_vals = lobpcg_worker.E**0.5
+                    ray_actual = torch.sum(sing_vals**2)
+                    self.tqdm_set_description(ray_actual, sing_vals, t, "lobpcg")
+    
+                    if lobpcg_worker.ivars["istep"] % 10 == 0:
+                        if self.stopping_criteria(ray_actual, tol, max_compute_time):
+                            lobpcg_worker.bvars['force_stop'] = True
+                t.update(1)
 
         self.init_time()
 

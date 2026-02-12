@@ -207,29 +207,46 @@ class Jackpot(nn.Module):
             max_compute_time = self.max_compute_time
         
         # Main computation
+        self.svd_method = method
         if method == None:
             N, M = self.model.N, self.model.M
             
-            if N <= 1000:
+            if N <= 2000:
                 if M <= 1000:
-                    method = "svd"
+                    self.svd_method = "svd"
                 else:
-                    method = "svd_ATA"
+                    self.svd_method = "svd_ATA"
             else:
-                method = "lobpcg"
+                self.svd_method = "lobpcg"
+
+        try: 
+            t1 = time()
+            self.sing_vals, self.sing_vects = self.model.find_singular_pairs(compute=True,
+                                                x0 = self.x_est.detach(),
+                                                save_result = False,
+                                                from_svd=(self.svd_method in ["svd", "svd_ATA"]),
+                                                method=self.svd_method,
+                                                n_singular_pairs=n_singular_pairs,
+                                                save_load_filename="",
+                                                max_compute_time=max_compute_time)
+            self.jac_spec_timing = time() - t1
+        except (MemoryError, OverflowError) as e: 
+            print(f"Fallback due to memory-related error: {e}") 
+            print("Compute using LOBPCG") 
+            self.svd_method = "lobpcg"
+            
+            t1 = time()
+            self.sing_vals, self.sing_vects = self.model.find_singular_pairs(compute=True,
+                                                x0 = self.x_est,
+                                                save_result = False,
+                                                from_svd=(self.svd_method in ["svd", "svd_ATA"]),
+                                                method=self.svd_method,
+                                                n_singular_pairs=n_singular_pairs,
+                                                save_load_filename="",
+                                                max_compute_time=max_compute_time)
+            self.jac_spec_timing = time() - t1
         
-        t1 = time()
         
-        self.sing_vals, self.sing_vects = self.model.find_singular_pairs(compute=True,
-                                            x0 = self.x_est,
-                                            save_result = False,
-                                            from_svd=(method in ["svd", "svd_ATA"]),
-                                            method=method,
-                                            n_singular_pairs=n_singular_pairs,
-                                            save_load_filename="",
-                                            max_compute_time=max_compute_time)
-        
-        self.jac_spec_timing = time() - t1
     
     def compute_parameterization(self, criteria, optim_params,
                                  search_method="bfs", 
@@ -550,7 +567,7 @@ class Jackpot(nn.Module):
             def closure():
                 lbfgs.zero_grad()
                 objective = f(z, x_ortho)
-                objective.backward(retain_graph=False)
+                objective.backward(retain_graph=True)
                 snr = 10 * (torch.log10(y0_norm2) - torch.log10(2 * objective))
                 
                 self.tqdm_bar.set_description(self.tqdm_text + f", \
@@ -1362,10 +1379,10 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                 extend = [-l,l,-l,l]
                 
             if norm == None:
-                im = plt.imshow(snr_loss.numpy().T[::-1,:], cmap = 'copper',
+                im = plt.imshow(snr_loss.detach().numpy().T[::-1,:], cmap = 'copper',
                                 extent=extend, aspect = "auto")
             else:
-                im = plt.imshow(snr_loss.numpy().T[::-1,:], cmap = 'copper',
+                im = plt.imshow(snr_loss.detach().numpy().T[::-1,:], cmap = 'copper',
                                 norm = norm, extent=extend, aspect = "auto")
             cbar = plt.colorbar(im)
             plt.xlabel("$z_1$")

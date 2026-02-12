@@ -338,7 +338,7 @@ class Model(nn.Module):
             assert X_init.numel() == self.N * k
             X_init = X_init.view((self.N, k))
 
-        x_fl = x0.ravel()
+        x_fl = x0.ravel().detach()
 
         def jvp_fn(u):
             return torch.func.jvp(self.Phi, (x_fl,), (u,))[1]

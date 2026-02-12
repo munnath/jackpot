@@ -1399,7 +1399,7 @@ iter: {i_optim}, loss: {objective.item():.3e}, snr: {snr:.3f}, grad: {x_ortho.gr
                 Y, X = torch.meshgrid(X, Y, indexing = "ij")
                 snr_loss = torch.nan_to_num(snr_loss, posinf = max(levels)+1)
                 snr_loss[grid.n_points_per_axis[0]//2, grid.n_points_per_axis[1]//2] = + torch.inf
-                plt.contour(X, Y, snr_loss.numpy().T, levels = levels, 
+                plt.contour(X, Y, snr_loss.detach().numpy().T, levels = levels, 
                             colors = color_levels)
                 for level, color in zip(levels, color_levels):
                     cbar.ax.hlines(level, 0, 1, colors=color, linewidth=2)

@@ -319,9 +319,9 @@ class SingularSolver(nn.Module):
 
         with torch.no_grad():
 
-            (hist_ray, hist_sing, hist_time) = (self.history_ray_quotient.detach(),
-                                                self.history_sing_vals.detach(),
-                                                self.history_time.detach())
+            (hist_ray, hist_sing, hist_time) = (self.history_ray_quotient,
+                                                self.history_sing_vals,
+                                                self.history_time)
 
             return (X, hist_ray, hist_sing, hist_time)
 
